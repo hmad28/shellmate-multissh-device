@@ -1,8 +1,8 @@
 # DevOps Plan
 ## ShellMate - Development Operations
 
-**Version:** 1.0
-**Last Updated:** 2026-06-07
+**Version:** 1.1
+**Last Updated:** 2026-06-09
 
 ---
 
@@ -446,6 +446,160 @@ Example: `v1.2.3`
 2. Install dependencies
 3. Build application
 4. User restores database backup
+
+---
+
+## 11. Code Signing & Distribution
+
+### 11.1 MVP Approach: Unsigned Builds
+
+For MVP v1.0, ShellMate is distributed as **unsigned** binaries. Users will see OS warnings:
+- **Windows:** SmartScreen warning ("Windows protected your PC")
+- **macOS:** Gatekeeper block ("cannot be opened because the developer cannot be verified")
+- **Linux:** No warning (AppImage is fine unsigned)
+
+**Mitigation in user docs:**
+- Document the workaround clearly: macOS `xattr -d com.apple.quarantine ShellMate.app`, Windows "More info → Run anyway"
+- Provide SHA-256 checksums of all release artifacts on the GitHub Releases page
+- Sign release tags in git: `git tag -s v1.0.0`
+
+### 11.2 Post-MVP: Signed Builds
+
+When budget allows:
+
+| Platform | Cost | Tool |
+|----------|------|------|
+| **macOS** | Apple Developer Program: $99/year | `codesign` + `notarytool` for notarization |
+| **Windows** | Code Signing Cert: $200-500/year (EV cert: $300-600/year, no SmartScreen warm-up) | `signtool.exe` via Tauri bundler |
+| **Linux** | Free (GPG) | Sign AppImage with GPG, publish public key |
+
+### 11.3 Tauri v2 Updater (Post-MVP)
+
+When auto-updater is added:
+- Generate Tauri updater key pair (`tauri signer generate`)
+- Public key embedded in app, private key in CI secret only
+- Updates served from GitHub Releases or self-hosted endpoint
+- Updates are signed even if app binary is not (defense in depth)
+
+---
+
+## 12. Accessibility Testing
+
+### 12.1 Automated
+- **axe-core** integration via Vitest + Testing Library
+- Run on every PR via CI
+- Fail build on critical/serious violations
+- Generate accessibility report per release
+
+### 12.2 Manual
+- Keyboard-only navigation walkthrough each release (no mouse)
+- Screen reader smoke test: NVDA on Windows, VoiceOver on macOS
+- Test with `prefers-reduced-motion` and high contrast OS settings
+- Color contrast verification with axe DevTools and Lighthouse
+
+### 12.3 Tooling
+```bash
+# Install
+bun add -D @axe-core/react vitest-axe
+
+# Example test (vitest)
+import { render } from '@testing-library/react';
+import { axe, toHaveNoViolations } from 'vitest-axe';
+
+expect.extend({ toHaveNoViolations });
+
+it('host form has no a11y violations', async () => {
+  const { container } = render(<HostForm />);
+  const results = await axe(container);
+  expect(results).toHaveNoViolations();
+});
+```
+
+---
+
+## 13. Performance Budget Enforcement
+
+### 13.1 Targets (from PRD)
+
+| Metric | Target | Enforcement |
+|--------|--------|-------------|
+| Cold start | < 2 seconds | Manual benchmark per release |
+| Memory idle | < 50 MB | Manual + heap profiling |
+| Memory 5 tabs | < 100 MB | Manual benchmark |
+| SSH overhead | < 5 ms vs native | Manual benchmark |
+| Binary size | < 20 MB installer | **CI assertion** (block PR if exceeded) |
+| Frontend bundle | < 500 KB gzipped | **CI assertion** (`vite-bundle-analyzer`) |
+
+### 13.2 CI Size Gate
+
+```yaml
+# .github/workflows/ci.yml — additional step
+- name: Check binary size
+  run: |
+    SIZE=$(stat -c%s src-tauri/target/release/bundle/appimage/*.AppImage)
+    MAX=20971520  # 20 MB
+    if [ $SIZE -gt $MAX ]; then
+      echo "❌ Binary size $SIZE exceeds budget $MAX"
+      exit 1
+    fi
+
+- name: Check frontend bundle size
+  run: bun run build && bunx vite-bundle-visualizer --output dist/stats.html
+```
+
+### 13.3 Profiling Tools
+
+| What | Tool |
+|------|------|
+| Rust startup | `cargo flamegraph`, `tracing` spans |
+| Rust memory | `dhat-rs`, `heaptrack` |
+| Frontend bundle | `vite-bundle-visualizer`, `source-map-explorer` |
+| Frontend runtime | Chrome DevTools (WebView2 supports it on Windows) |
+| End-to-end startup | Custom wall-clock measurement in `main.rs` |
+
+### 13.4 Benchmark Suite (Post-MVP)
+
+Pre-release benchmark script that reports:
+- Cold start time (median of 5 runs)
+- Memory at 0/1/5/10 tabs
+- SSH connect time to known test server
+- Frontend bundle size & install size
+
+Results committed to `benchmarks/` for regression tracking.
+
+---
+
+## 14. Test Strategy Detail
+
+### 14.1 Coverage Targets
+
+| Layer | Target |
+|-------|--------|
+| Rust crypto module | 95%+ (critical) |
+| Rust SSH module | 80%+ |
+| Rust db module | 85%+ |
+| Frontend stores | 80%+ |
+| Frontend components | 60%+ (focus on logic, not styling) |
+| Overall | 70%+ |
+
+### 14.2 SSH Testing Approach
+
+- **Unit tests**: mock russh primitives where possible
+- **Integration tests**: spin up `linuxserver/openssh-server` Docker container in CI for real SSH handshake & I/O testing
+- **Manual tests**: connect to real Linux/macOS/BSD servers before each release
+
+### 14.3 Crypto Testing
+
+- Roundtrip tests: encrypt → decrypt → equal to original
+- Wrong-key tests: decryption with different key fails
+- Tampered-ciphertext tests: GCM auth tag rejects tampered data
+- Property-based tests via `proptest` for varied inputs
+
+### 14.4 What NOT to Test
+
+- Generated code (Tauri bindings)
+- Third-party library internals
+- Trivial getters/setters
 
 ---
 

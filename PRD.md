@@ -1,10 +1,10 @@
 # Product Requirements Document (PRD)
 ## SSH Client Desktop App — Self-Hosted, Local-First
-**Codename:** ShellMate *(working title, bisa diganti)*
-**Version:** 1.1
+**Codename:** ShellMate
+**Version:** 1.2
 **Author:** Matt
-**Last Updated:** 2026-06-03
-**Status:** Draft
+**Last Updated:** 2026-06-09
+**Status:** Approved for development
 
 ---
 
@@ -84,13 +84,15 @@ ShellMate hadir sebagai SSH client yang **ringan, modern, dan sepenuhnya lokal**
 | Layer | Teknologi | Alasan |
 |-------|-----------|--------|
 | App Framework | **Tauri v2** | Ringan (~5-10MB binary), pakai WebView OS bukan Chromium |
-| Frontend | **React + Vite** | Familiar, ekosistem besar, cepat |
-| Styling | **Tailwind CSS** | Utility-first, konsisten |
+| Frontend | **React 18 + Vite + TypeScript (strict)** | Familiar, ekosistem besar, cepat, type-safe |
+| Styling | **Tailwind CSS 3** | Utility-first, konsisten |
+| UI Components | **shadcn/ui** | Copy-paste components, accessible by default (Radix UI), customizable |
 | Terminal Emulator | **xterm.js** | Industry standard, feature-rich |
 | SSH Backend | **Rust (`russh` crate)** | Native performance, credentials tidak keluar dari Rust layer |
 | Local Storage | **SQLite via `rusqlite`** | Ringan, reliable, satu file database |
-| Enkripsi | **AES-256-GCM** | Enkripsi credentials sebelum disimpan ke SQLite |
+| Enkripsi | **AES-256-GCM + Argon2id** | Enkripsi credentials sebelum disimpan ke SQLite, key derivation memory-hard |
 | State Management | **Zustand** | Simpel, ringan |
+| Package Manager | **Bun** (frontend), **Cargo** (backend) | Fast install, native tooling |
 
 ### 3.2 Arsitektur Umum
 
@@ -528,66 +530,91 @@ CREATE TABLE settings (
 
 ## 10. Milestones & Roadmap
 
-### Milestone 1 — Core SSH (Target: 2 minggu)
-- [ ] Scaffold Tauri v2 + React + Vite project
-- [ ] SQLite setup + schema migration
-- [ ] CRUD hosts (add, edit, delete)
-- [ ] Vault + enkripsi AES-256
-- [ ] SSH connect via password auth
-- [ ] Terminal xterm.js rendering
-- [ ] **Multi-tab session** *(core use case: connect ke banyak server sekaligus)*
-- [ ] Basic sidebar layout
+**Total MVP Desktop: 8 minggu** (6 minggu development + 2 minggu polish & buffer).
 
-### Milestone 2 — Productionize (Target: +1 minggu)
-- [ ] SSH key authentication
+### Milestone 1 — Project Setup (Week 1) ✅
+- [x] Scaffold Tauri v2 + React + Vite + TypeScript project
+- [x] Configure Tailwind CSS + shadcn/ui foundations
+- [x] SQLite setup + schema migrations
+- [x] Basic app layout (sidebar, tab bar, status bar, custom title bar)
+- [x] Zustand stores (host, tab, ui)
+- [x] ESLint + Prettier + Husky + CI scaffold
+
+### Milestone 2 — Core SSH (Week 2-3)
+- [ ] Vault: Argon2id + AES-256-GCM + zeroize
+- [ ] Vault setup/unlock/lock flow + recovery warning UI
+- [ ] SSH connection via password & key auth (russh)
+- [ ] xterm.js terminal integration with SSH I/O streaming
+- [ ] **Multi-tab session** *(core use case)*
+- [ ] Connection sharing strategy untuk multi-tab same-host
+
+### Milestone 3 — Host Management (Week 4)
+- [ ] Host CRUD (Rust + React)
 - [ ] Groups & tags
-- [ ] Snippets panel
+- [ ] Host search
+- [ ] Host validation
+- [ ] Drag-and-drop host organization
+
+### Milestone 4 — Productivity Features (Week 5-6)
+- [ ] Snippets panel + execution to terminal
+- [ ] Settings dialog (theme, font, shortcuts, auto-lock)
+- [ ] Auto-lock vault setelah idle
+- [ ] Known hosts management + verification UI
 - [ ] Keyboard shortcuts
-- [ ] Settings page
-
-### Milestone 3 — Power Features (Target: +2 minggu)
-- [ ] Port forwarding
-- [ ] SFTP file browser
-- [ ] Search hosts
 - [ ] Terminal search (xterm.js addon)
-- [ ] Known hosts management
-- [ ] Auto-lock vault
 
-### Milestone 4 — Polish Desktop (Target: +1 minggu)
-- [ ] Dark/light theme
-- [ ] Onboarding flow (first launch)
-- [ ] Error handling & reconnect UX
+### Milestone 5 — SFTP & Port Forwarding (Week 7)
+- [ ] SFTP file browser (browse, upload, download, rename, delete, mkdir)
+- [ ] Drag-and-drop upload
+- [ ] Port forwarding (local & remote)
+- [ ] Port conflict detection
+
+### Milestone 6 — Polish & Release (Week 8)
+- [ ] Onboarding flow (first launch, vault setup with recovery warning)
+- [ ] Error handling + reconnect UI
 - [ ] Export/import hosts (JSON terenkripsi)
-- [ ] App packaging & installer (Windows .msi, macOS .dmg, Linux .AppImage)
+- [ ] Cross-platform testing (Windows, macOS, Linux)
+- [ ] App packaging: Windows .msi, macOS .dmg, Linux .AppImage
+- [ ] User documentation
+- [ ] Release v1.0.0
 
-### Milestone 5 — Mobile App Android & iOS (Target: Post-MVP)
-- [ ] Tauri v2 mobile target setup (Android & iOS)
+### Post-MVP — Mobile App (Android & iOS)
+- [ ] Tauri v2 mobile target setup
 - [ ] Adaptive UI untuk layar kecil
 - [ ] Extended key bar (Esc, Tab, Ctrl, arrow keys)
-- [ ] Multi-tab navigation di mobile (swipe / bottom navigator)
+- [ ] Multi-tab navigation di mobile
 - [ ] Biometric unlock (Face ID, Fingerprint)
 - [ ] Touch-friendly SFTP browser
 
-### Milestone 6 — Multi-Device Sync (Target: Post-MVP)
+### Post-MVP — Multi-Device Sync
 - [ ] Sync engine (encrypted export/import)
 - [ ] iCloud & GDrive backend
 - [ ] Self-hosted / WebDAV backend
 - [ ] Conflict resolution UI
 
+### Post-MVP — Advanced
+- [ ] Broadcast mode (kirim command ke banyak server sekaligus)
+- [ ] Auto-updater
+- [ ] Code signing (macOS notarization, Windows Authenticode)
+
 ---
 
-## 11. Open Questions
+## 11. Resolved Decisions
 
-| # | Pertanyaan | Status |
-|---|-----------|--------|
-| 1 | Nama final app? "ShellMate" atau nama lain? | ❓ Open |
-| 2 | Apakah perlu support Mosh di MVP? | ❓ Open |
-| 3 | Apakah SFTP bisa ditunda ke post-MVP? | ❓ Open |
-| 4 | Lisensi: MIT / Apache 2.0 / proprietary? | ❓ Open |
-| 5 | Apakah perlu auto-updater di MVP? | ❓ Open |
-| 6 | Mobile: apakah Android atau iOS yang dikerjakan lebih dulu? | ❓ Open |
-| 7 | Multi-device sync: apakah pakai self-hosted server ShellMate atau murni user's own cloud? | ❓ Open |
-| 8 | Broadcast mode (kirim command ke banyak server sekaligus) — masuk MVP atau post-MVP? | ❓ Open |
+| # | Topik | Keputusan | Alasan |
+|---|-------|-----------|--------|
+| 1 | Nama final | **ShellMate** | Distinctive, sudah dipakai konsisten di docs |
+| 2 | Mosh support di MVP | **Skip** | russh tidak native support, scope creep |
+| 3 | SFTP scope | **Tetap MVP** | Core productivity feature, sudah commit di scope |
+| 4 | License | **MIT** | Permissive, kompatibel dengan tujuan open-source self-hostable |
+| 5 | Auto-updater di MVP | **Skip** | Manual download cukup untuk v1.0; butuh code signing infra |
+| 6 | Mobile: Android atau iOS dulu | **Android** | Dev cycle lebih cepat, tidak perlu Apple Developer cert |
+| 7 | Multi-device sync arsitektur | **User's own cloud only** | Sesuai prinsip "no ShellMate server", privacy-first |
+| 8 | Broadcast mode | **Post-MVP (v1.1)** | Bukan core MVP, complexity tidak sebanding untuk MVP |
+| 9 | Encryption granularity | **Per-credential field** (AES-256-GCM) untuk MVP, evaluasi SQLCipher post-MVP | Ringan, cukup untuk MVP threat model. Lihat 07-security-plan.md §11 |
+| 10 | Master password recovery | **No recovery** (lupa password = data hilang) | Standar untuk vault local-first, harus eksplisit di onboarding |
+| 11 | Master password policy | **Length-first** (min 12 karakter), tidak wajib karakter khusus | NIST SP 800-63B (2017+) rekomen length over complexity |
+| 12 | Connection sharing multi-tab | **1 SSH connection per tab** untuk MVP, evaluasi multi-channel post-MVP | Isolation lebih baik, lebih simpel. Lihat 04-backend-plan.md §11 |
 
 ---
 

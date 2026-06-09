@@ -1,8 +1,8 @@
 # Backend Plan
 ## ShellMate - Rust + Tauri Backend
 
-**Version:** 1.0
-**Last Updated:** 2026-06-07
+**Version:** 1.1
+**Last Updated:** 2026-06-09
 
 ---
 
@@ -705,6 +705,89 @@ tokio = { version = "1", features = ["full"] }
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 ```
+
+---
+
+## 9. SSH Connection Strategy
+
+### 9.1 Decision: One Connection Per Tab (MVP)
+
+For MVP, **each terminal tab opens its own SSH TCP connection** to the target server. Multiple tabs to the same host = multiple separate SSH connections.
+
+### 9.2 Rationale
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **1 connection per tab** (MVP choice) | Simple isolation, independent lifecycle, one tab failure ≠ other tabs affected, easy to reason about resources | Slightly higher resource usage for same-host scenario, more handshakes if user opens many tabs to same server |
+| **Shared connection, multiple channels** | Lower overhead per tab to same host (1 TCP conn, N channels via SSH multiplex), faster subsequent tab opens | Complex lifecycle management, channel close ≠ connection close, one connection death kills all tabs to that host, harder to debug |
+
+### 9.3 Constraints That Influenced Choice
+
+- **MVP timeline pressure**: Multi-channel multiplex adds significant complexity (channel state tracking, graceful degradation when host doesn't allow multiplex, etc.)
+- **Resource cost is acceptable**: Modern systems handle 10-20 SSH connections fine
+- **User mental model**: Closing one tab should not affect other tabs — even tabs to the same host
+- **Failure isolation**: Network blip on one tab shouldn't drop all tabs to that host
+- **Future flexibility**: Easier to add multiplex later than remove it
+
+### 9.4 Implementation Sketch
+
+```rust
+// One SshSession per tab — owns its own russh client + channel + stream
+pub struct SshSession {
+    pub id: String,           // matches frontend tab_id
+    pub host_id: String,
+    handle: russh::client::Handle<ClientHandler>,
+    channel: russh::Channel<russh::client::Msg>,
+    keepalive_task: tokio::task::JoinHandle<()>,
+}
+
+// SessionManager holds all active sessions
+pub struct SessionManager {
+    sessions: RwLock<HashMap<String, Arc<Mutex<SshSession>>>>,
+}
+
+impl SessionManager {
+    pub async fn open(&self, host_id: &str) -> Result<String> {
+        // Always create a fresh connection — no pooling for MVP
+        let session = SshSession::connect(host_id).await?;
+        let session_id = session.id.clone();
+        self.sessions.write().await.insert(session_id.clone(), Arc::new(Mutex::new(session)));
+        Ok(session_id)
+    }
+
+    pub async fn close(&self, session_id: &str) -> Result<()> {
+        if let Some(session) = self.sessions.write().await.remove(session_id) {
+            let mut session = session.lock().await;
+            session.disconnect().await?;
+        }
+        Ok(())
+    }
+}
+```
+
+### 9.5 Resource Limits
+
+To prevent runaway resource usage:
+- Soft limit: warn user when active sessions exceed 20
+- Hard limit: configurable (default 50) — refuse new connection with clear error message
+- Per-session memory budget: ~2-5 MB for buffers and state
+
+### 9.6 SFTP Coexistence
+
+SFTP runs as a **separate channel on the same SSH connection of its parent terminal session**. This is allowed by SSH protocol and supported by russh. Specifically:
+- Opening SFTP from a terminal tab opens a new `subsystem("sftp")` channel on that tab's SSH connection
+- SFTP channel and shell channel are independent — closing SFTP doesn't close the shell
+- If user opens SFTP without an active terminal, a new dedicated SSH connection is created
+- This is the **one place** where multi-channel is used in MVP — and it's narrow and well-tested
+
+### 9.7 Post-MVP Evaluation
+
+Conditions to revisit and add connection multiplexing:
+- User feedback: "I open 5 tabs to same server, want it faster"
+- Performance profiling shows handshake overhead is significant
+- Memory pressure on systems with many tabs
+
+If revisited, implement as **opt-in setting** ("Reuse SSH connection for tabs to same host"), not default — to preserve isolation guarantees for users who depend on them.
 
 ---
 

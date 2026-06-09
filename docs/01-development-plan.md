@@ -1,9 +1,48 @@
 # Development Plan
 ## ShellMate - SSH Client Desktop App
 
-**Version:** 1.0
-**Last Updated:** 2026-06-07
+**Version:** 1.2
+**Last Updated:** 2026-06-09
 **Timeline:** 8 weeks (MVP Desktop)
+
+---
+
+## 0. Progress Tracker
+
+| Phase | Status | Completed | Notes |
+|-------|--------|-----------|-------|
+| Phase 1: Project Setup | ✅ Complete | 2026-06-09 | Tauri v2 + React/Vite/TS scaffold, SQLite schema, layout shell, stores, lint/typecheck/build all green |
+| Phase 2: Core SSH | ⏳ Pending | — | Vault, russh integration, xterm terminal, multi-tab |
+| Phase 3: Host Management | ⏳ Pending | — | CRUD UI, groups, search |
+| Phase 4: Vault & Security | ⏳ Pending | — | Argon2id + AES-256-GCM live integration |
+| Phase 5: Advanced Features | ⏳ Pending | — | Snippets, settings, SFTP, port forwarding |
+| Phase 6: Polish & Release | ⏳ Pending | — | Onboarding, packaging, docs |
+
+### Phase 1 Deliverables (Done)
+
+- ✅ Tauri v2 scaffold (`src-tauri/Cargo.toml`, `tauri.conf.json`, `capabilities/default.json`, `build.rs`, `main.rs`, `lib.rs`)
+- ✅ Frontend scaffold (`package.json`, `vite.config.ts`, `tsconfig.json` strict, Tailwind 3 with custom dark palette, PostCSS)
+- ✅ SQLite database with full schema migrations (`src-tauri/src/db/`)
+  - Tables: `groups`, `credentials`, `hosts`, `snippets`, `port_forwards`, `settings`, `_migrations`
+  - WAL mode, foreign keys, parameterized queries
+- ✅ Tauri commands: `get_hosts`, `create_host`, `update_host`, `delete_host`, `get_settings`, `set_setting`, `app_version`
+- ✅ AppState with `parking_lot::Mutex<Connection>`
+- ✅ AppError + serde-serializable error type
+- ✅ Layout components: `AppLayout`, `TitleBar` (custom, drag region), `Sidebar`, `TabBar`, `StatusBar`, `ContentArea`
+- ✅ Zustand stores: `tab-store`, `ui-store`, `host-store`
+- ✅ Typed Tauri invoke wrapper (`src/lib/tauri.ts`)
+- ✅ i18n strings module (`src/i18n/en.ts`)
+- ✅ ESLint + Prettier + tsconfig strict (all checks pass)
+- ✅ MIT LICENSE
+- ✅ Verified: `npm run typecheck` ✓, `npm run lint` ✓, `npm run build` ✓ (197 KB / 62 KB gzipped), `cargo build` ✓ (MSVC toolchain)
+
+### Phase 1 Decisions Made During Implementation
+
+- **Package manager**: npm (not Bun) — Bun on user's system was POSIX-only binary. npm gives broader Windows compatibility.
+- **Rust toolchain**: MSVC (`stable-x86_64-pc-windows-msvc`) pinned via `rust-toolchain.toml`. Initial mingw-gnu attempt failed with "export ordinal too large" — known mingw + Tauri issue on Windows. MSVC is the recommended toolchain for Tauri on Windows.
+- **Window decorations**: disabled (`decorations: false`) for custom title bar.
+- **Database location**: OS-standard app data dir (`%APPDATA%\com.shellmate.app\` on Windows) via Tauri `app_data_dir()`.
+- **Frontend bundle baseline**: 62 KB gzipped — well within 500 KB budget.
 
 ---
 
@@ -17,12 +56,12 @@
 
 ### 1.2 Team Structure
 - **Primary Developer:** Matt (Full-stack)
-- **AI Assistant:** Mimo 2.5 (Code generation, debugging, documentation)
+- **AI Assistant:** OpenCode / Claude (code generation, debugging, documentation review)
 
 ### 1.3 Development Environment
 - **OS:** Windows 11 (primary), macOS/Linux (cross-platform testing)
 - **IDE:** VS Code / Cursor / OpenCode
-- **Terminal:** Termul Manager / PowerShell / Git Bash
+- **Terminal:** PowerShell / Windows Terminal / Git Bash
 - **Package Manager:** Bun (frontend), Cargo (backend)
 
 ---
@@ -31,45 +70,45 @@
 
 ### 2.1 Day 1-2: Scaffold Project
 **Tasks:**
-- [ ] Initialize Tauri v2 project with React + Vite template
-- [ ] Configure Tailwind CSS with custom theme
-- [ ] Set up TypeScript strict mode
-- [ ] Configure ESLint + Prettier
-- [ ] Initialize Git repository with .gitignore
-- [ ] Create README.md and basic documentation
+- [x] Initialize Tauri v2 project with React + Vite template
+- [x] Configure Tailwind CSS with custom theme
+- [x] Set up TypeScript strict mode
+- [x] Configure ESLint + Prettier
+- [x] Initialize Git repository with .gitignore
+- [x] Create README.md and basic documentation
 
 **Deliverables:**
-- Working Tauri app that opens a window
-- Basic development environment configured
-- Git repository with initial commit
+- ✅ Working Tauri app that opens a window
+- ✅ Basic development environment configured
+- ✅ Git repository with initial commit
 
 ### 2.2 Day 3-4: Database Setup
 **Tasks:**
-- [ ] Add rusqlite dependency to Cargo.toml
-- [ ] Create database schema (SQLite)
-- [ ] Implement database initialization
-- [ ] Create migration system
-- [ ] Set up database path per OS
+- [x] Add rusqlite dependency to Cargo.toml
+- [x] Create database schema (SQLite)
+- [x] Implement database initialization
+- [x] Create migration system
+- [x] Set up database path per OS
 
 **Deliverables:**
-- SQLite database created on app start
-- Schema migrations running successfully
-- Database module ready for queries
+- ✅ SQLite database created on app start
+- ✅ Schema migrations running successfully
+- ✅ Database module ready for queries
 
 ### 2.3 Day 5-7: Basic UI Layout
 **Tasks:**
-- [ ] Create main app layout (sidebar + content area)
-- [ ] Implement custom title bar
-- [ ] Create sidebar with host list placeholder
-- [ ] Add tab bar for terminal sessions
-- [ ] Implement status bar
-- [ ] Set up Zustand stores (host, tab, UI)
+- [x] Create main app layout (sidebar + content area)
+- [x] Implement custom title bar
+- [x] Create sidebar with host list placeholder
+- [x] Add tab bar for terminal sessions
+- [x] Implement status bar
+- [x] Set up Zustand stores (host, tab, UI)
 
 **Deliverables:**
-- Responsive app layout
-- Sidebar with placeholder content
-- Tab bar ready for terminal tabs
-- Basic state management working
+- ✅ Responsive app layout
+- ✅ Sidebar with placeholder content
+- ✅ Tab bar ready for terminal tabs
+- ✅ Basic state management working
 
 ---
 
@@ -294,7 +333,7 @@
 - Blockers identified immediately
 
 ### 11.2 Weekly
-- Sprint review with Mimo
+- Sprint review
 - Demo of completed features
 - Planning for next week
 

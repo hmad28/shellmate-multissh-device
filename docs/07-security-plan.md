@@ -1,8 +1,8 @@
 # Security Plan
 ## ShellMate - Security Architecture
 
-**Version:** 1.0
-**Last Updated:** 2026-06-07
+**Version:** 1.1
+**Last Updated:** 2026-06-09
 
 ---
 
@@ -178,12 +178,11 @@ impl Drop for SecureBuffer {
 │  User Input                                              │
 │      ↓                                                   │
 │  ┌─────────────────────────────────────────────────┐   │
-│  │  Validate Strength                               │   │
-│  │  - Minimum 8 characters                          │   │
-│  │  - At least 1 uppercase                          │   │
-│  │  - At least 1 lowercase                          │   │
-│  │  - At least 1 number                             │   │
-│  │  - At least 1 special character                  │   │
+│  │  Validate Strength (length-first policy)         │   │
+│  │  - Minimum 12 characters                         │   │
+│  │  - Reject common passwords (top-10k list)        │   │
+│  │  - Show strength meter (zxcvbn-style)            │   │
+│  │  - No mandatory complexity rules                 │   │
 │  └─────────────────────────────────────────────────┘   │
 │      ↓                                                   │
 │  ┌─────────────────────────────────────────────────┐   │
@@ -200,10 +199,63 @@ impl Drop for SecureBuffer {
 │  │  - Compare with stored hash                      │   │
 │  │  - If match: unlock vault                        │   │
 │  │  - If no match: increment attempt counter        │   │
+│  │    + exponential backoff after 5 failed attempts │   │
 │  └─────────────────────────────────────────────────┘   │
 │                                                          │
 └─────────────────────────────────────────────────────────┘
 ```
+
+### 4.1.1 Master Password Policy
+
+Following **NIST SP 800-63B** (2017+) recommendations: **length over complexity**.
+
+| Rule | Required |
+|------|----------|
+| Minimum length | 12 characters |
+| Maximum length | 128 characters |
+| Mandatory uppercase | ❌ Not required |
+| Mandatory lowercase | ❌ Not required |
+| Mandatory digit | ❌ Not required |
+| Mandatory special char | ❌ Not required |
+| Reject common passwords | ✅ Top-10k list (e.g., `password123`) |
+| Strength meter shown | ✅ zxcvbn or similar |
+| Allow passphrases | ✅ Encouraged (e.g., "correct horse battery staple") |
+
+**Rationale:**
+- Forced complexity rules push users to predictable patterns (`Password1!`).
+- Long passphrases have more entropy and are easier to remember.
+- Reference: [NIST SP 800-63B §5.1.1.2](https://pages.nist.gov/800-63-3/sp800-63b.html#sec5).
+
+### 4.1.2 No Recovery — Critical UX Rule
+
+**ShellMate does NOT support master password recovery.** This is by design for a local-first vault: any recovery mechanism would be an attack vector.
+
+**Required UX:**
+- During vault setup, user must check a confirmation: "I understand that if I forget my master password, my data cannot be recovered."
+- Suggest user write it down or store in a separate password manager
+- Optional: offer to print/display a "vault info" sheet (vault location, hint they wrote — never the password itself)
+- Strongly recommend exporting an **encrypted backup** (post-MVP feature) periodically
+
+**On vault setup screen:**
+```
+⚠️  Important: There is no way to recover your master password.
+   If you forget it, all stored credentials will be permanently lost.
+
+   Tips:
+   • Use a passphrase you'll remember (e.g., 4-5 random words)
+   • Write it down and store it somewhere safe
+   • Consider using a separate password manager
+
+   [✓] I understand the risks. There is no recovery.
+
+   [ Cancel ]    [ Create Vault ]
+```
+
+### 4.1.3 Brute-Force Mitigation
+- Argon2id parameters tuned to ~500ms-1s on target hardware (configurable)
+- Failed unlock attempts tracked in-memory (not persisted across app restart to avoid lockout from process kill)
+- Exponential backoff: 1s, 2s, 5s, 10s, 30s after attempts 5, 6, 7, 8, 9+
+- After 10 consecutive failed attempts in single session: optional 5-min cooldown (configurable in settings)
 
 ### 4.2 SSH Authentication
 ```
@@ -451,6 +503,83 @@ pub fn sanitize_log(message: &str) -> String {
 - Security issues reported via GitHub Security Advisories
 - Critical vulnerabilities patched within 24 hours
 - Users notified via release notes
+
+---
+
+## 11. Encryption Strategy Decision
+
+### 11.1 Decision: Per-Field Encryption (MVP)
+
+For MVP, ShellMate uses **per-field encryption** of credentials only — passwords, private keys, and passphrases stored in the `credentials` table are encrypted with AES-256-GCM. Other tables (`hosts`, `groups`, `snippets`, `port_forwards`, `settings`) are stored as plaintext SQLite rows.
+
+### 11.2 What This Protects
+- ✅ Passwords and private keys at rest
+- ✅ Memory dump while vault is locked
+- ✅ Stolen SQLite file cannot be used to authenticate to SSH servers
+- ✅ Granular re-encryption (rotate vault key without re-encrypting whole DB)
+
+### 11.3 What This Does NOT Protect
+- ❌ Hostnames, usernames, host labels, group names, snippet contents, notes
+- ❌ Metadata leakage if attacker accesses SQLite file (they can see your server inventory)
+- ❌ Snippet contents may include sensitive paths or commands
+
+For MVP threat model (single-user device, file-system-level protection from OS), this trade-off is acceptable. Users with stricter requirements should rely on full-disk encryption (BitLocker, FileVault, LUKS).
+
+### 11.4 Alternative Considered: SQLCipher
+
+**SQLCipher** would encrypt the entire SQLite database file, protecting all metadata. It is a transparent layer over SQLite with strong encryption (AES-256, PBKDF2 by default).
+
+| Aspect | Per-Field (MVP) | SQLCipher (Future) |
+|--------|-----------------|--------------------|
+| Metadata protection | ❌ | ✅ |
+| Performance overhead | None | ~5-15% on read/write |
+| Build complexity | Low (pure Rust) | Medium (C dep, needs `rusqlite` SQLCipher feature) |
+| Cross-platform | Easy | Requires platform-specific build flags |
+| Key management | Per-vault (Argon2id-derived) | Same key, applied at DB open |
+| Migration cost from MVP | — | Need migration script |
+
+### 11.5 Post-MVP Migration Path
+
+Re-evaluate SQLCipher when:
+- User requests metadata privacy (stronger threat model)
+- Multi-device sync is added (encrypted backups in untrusted cloud)
+- Performance budget allows ~10% read/write overhead
+
+**Migration approach:**
+1. Add SQLCipher as opt-in setting ("Full database encryption")
+2. On enable: derive new DB key from master password (separate from credential vault key, or shared via HKDF)
+3. Re-create database with `PRAGMA key`, copy data, swap files atomically
+4. Existing per-field encryption stays — defense in depth
+
+### 11.6 Implementation Notes (MVP)
+
+```rust
+// credentials table: encrypted blob + nonce
+struct EncryptedCredential {
+    id: String,
+    cred_type: CredentialType,
+    encrypted_data: Vec<u8>,  // AES-256-GCM ciphertext + auth tag
+    nonce: [u8; 12],          // GCM nonce (random per encryption)
+    created_at: String,
+    updated_at: String,
+}
+
+// Decrypt only when needed (e.g., during SSH connect), zeroize after
+fn use_credential(id: &str, vault_key: &[u8; 32]) -> Result<()> {
+    let row = db::get_credential(id)?;
+    let plaintext = decrypt(&row.encrypted_data, &row.nonce, vault_key)?;
+    let secret = SecureBuffer::new(plaintext);
+    // ... use secret ...
+    // SecureBuffer::Drop zeroizes
+    Ok(())
+}
+```
+
+**Key rules:**
+- Vault key lives only in memory (never persisted)
+- Generate fresh nonce for every encryption (12 random bytes)
+- Use authenticated encryption (GCM) — never raw AES-CBC or AES-CTR
+- Rotate vault key when master password changes (re-encrypt all credentials)
 
 ---
 

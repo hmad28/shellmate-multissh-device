@@ -1,8 +1,8 @@
 # ERD Plan - Entity Relationship Diagram
 ## ShellMate - Database Schema
 
-**Version:** 1.0
-**Last Updated:** 2026-06-07
+**Version:** 1.1
+**Last Updated:** 2026-06-09
 
 ---
 

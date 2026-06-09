@@ -19,3 +19,14 @@ Thumbs.db
 
 # Tauri
 src-tauri/target/
+src-tauri/gen/
+src-tauri/WixTools/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temp files
+*.tmp
+.opencode/node_modules/
+

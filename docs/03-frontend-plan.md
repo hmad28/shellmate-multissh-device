@@ -1,8 +1,8 @@
 # Frontend Plan
 ## ShellMate - React + Vite + Tailwind CSS
 
-**Version:** 1.0
-**Last Updated:** 2026-06-07
+**Version:** 1.1
+**Last Updated:** 2026-06-09
 
 ---
 
@@ -63,11 +63,11 @@ interface AppLayoutProps {
 // │              │  ┌──┬──┬──┬──────────────────┐    │
 // │  [Search]    │  │T1│T2│T3│         +        │    │
 // │  ▼ Groups    │  └──┴──┴──┴──────────────────┘    │
-│ │    Hosts     │                                    │
-│ │  + Add Host  │   [Terminal / SFTP / Settings]     │
-│ │              │                                    │
-│ │  [Snippets]  │                                    │
-│ │  [Settings]  │                                    │
+// │    Hosts     │                                    │
+// │  + Add Host  │   [Terminal / SFTP / Settings]     │
+// │              │                                    │
+// │  [Snippets]  │                                    │
+// │  [Settings]  │                                    │
 // └──────────────┴────────────────────────────────────┘
 ```
 
@@ -490,38 +490,130 @@ const shortcuts: Record<string, () => void> = {
 
 ---
 
-## 8. Accessibility
+## 8. Accessibility (a11y)
 
-### 8.1 ARIA Labels
-- All interactive elements have ARIA labels
-- Tab navigation supported
-- Screen reader friendly
+### 8.1 Standards
+- Target **WCAG 2.1 AA** compliance for non-terminal UI
+- Terminal content (xterm.js) is exempt from typical text contrast checks but UI chrome around it is not
 
-### 8.2 Keyboard Navigation
-- Full keyboard navigation
-- Focus indicators
-- Skip links
+### 8.2 Semantic HTML & ARIA
+- Use semantic elements: `<button>`, `<nav>`, `<main>`, `<aside>`, `<dialog>`
+- All icon-only buttons must have `aria-label` (e.g. close tab, add host)
+- Tab list uses `role="tablist"`, tabs use `role="tab"` with `aria-selected`
+- Dialogs use `role="dialog"` with `aria-modal="true"` and labeled by title
+- Status indicators (Connected/Connecting/Disconnected) announced via `aria-live="polite"`
+- shadcn/ui components are built on Radix UI which provides ARIA out of the box — leverage this
 
-### 8.3 Color Contrast
-- WCAG 2.1 AA compliance
-- High contrast mode support
+### 8.3 Keyboard Navigation
+- Every action reachable via keyboard (no mouse-only)
+- Logical tab order through sidebar → tab bar → terminal
+- `Esc` closes dialogs and dropdowns
+- Focus trap inside open dialogs (shadcn/ui handles this)
+- Focus restored to trigger element when dialog closes
+- Skip link "Skip to terminal" at top for screen reader users
+- Visible focus rings (Tailwind `focus-visible:ring-2`)
+
+### 8.4 Color & Contrast
+- Verify contrast ratio ≥ 4.5:1 for normal text, ≥ 3:1 for large text and UI components
+- Don't rely on color alone — connection status uses color **and** icon (●/○/✗)
+- Test dark and light themes separately
+- Tools: axe DevTools, Lighthouse, Stark plugin
+
+### 8.5 Motion & Animation
+- Respect `prefers-reduced-motion` — disable transitions for tab switching, sidebar collapse, modal animations
+- No flashing/strobing content (epilepsy safety)
+
+### 8.6 Screen Reader Considerations
+- Terminal output **not** announced (would be overwhelming) — but provide a "Copy last output" shortcut
+- Connection state changes announced via `aria-live` region in status bar
+- Vault lock state changes announced
+
+### 8.7 Touch Targets (forward-compat for mobile)
+- Min 44x44px hit area for interactive elements
+- Adequate spacing between adjacent buttons
+
+### 8.8 Testing
+- Manual: keyboard-only navigation walkthrough each release
+- Automated: axe-core via Vitest + Testing Library
+- Periodic: NVDA (Windows) and VoiceOver (macOS) smoke test
 
 ---
 
-## 9. Testing Strategy
+## 9. Internationalization (i18n)
 
-### 9.1 Unit Tests
+### 9.1 MVP Scope
+- **Default language: English** (UI strings)
+- Code Bahasa Indonesia comments allowed in source for team productivity
+- All user-facing strings extracted to constants from day one (no hardcoded strings in JSX)
+
+### 9.2 Architecture
+- Lightweight approach for MVP: single `src/i18n/en.ts` with typed string keys
+- No runtime translation library yet (avoid bundle bloat)
+- Structure ready for `react-i18next` or `next-intl` swap-in post-MVP
+
+```typescript
+// src/i18n/en.ts
+export const strings = {
+  app: {
+    name: 'ShellMate',
+    locked: 'Vault Locked',
+  },
+  hosts: {
+    add: 'Add Host',
+    edit: 'Edit Host',
+    delete: 'Delete Host',
+    confirmDelete: 'Are you sure you want to delete this host?',
+  },
+  terminal: {
+    connecting: 'Connecting...',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    reconnect: 'Reconnect',
+  },
+  vault: {
+    unlock: 'Unlock Vault',
+    masterPasswordPlaceholder: 'Enter master password',
+    setupWarning: 'If you forget your master password, your data cannot be recovered.',
+  },
+} as const;
+
+// Usage:
+import { strings } from '@/i18n/en';
+<button>{strings.hosts.add}</button>
+```
+
+### 9.3 Post-MVP Plan
+- Bahasa Indonesia translation (`src/i18n/id.ts`)
+- Locale detection from OS / user setting
+- Plural forms via ICU MessageFormat or `react-i18next`
+- Date/time formatting via `Intl.DateTimeFormat`
+- RTL support deferred until needed
+
+### 9.4 Rules for Developers
+- ❌ Never inline user-facing strings: `<button>Add Host</button>`
+- ✅ Always use the strings object: `<button>{strings.hosts.add}</button>`
+- Error messages from backend should also be string keys, not raw text
+
+---
+
+## 10. Testing Strategy
+
+### 10.1 Unit Tests
 - Component rendering
 - Store logic
 - Hook behavior
 - Utility functions
 
-### 9.2 Integration Tests
+### 10.2 Integration Tests
 - Terminal connection flow
 - Host CRUD operations
 - Vault unlock/lock flow
 
-### 9.3 E2E Tests (Post-MVP)
+### 10.3 Accessibility Tests
+- axe-core integration via Vitest
+- Manual keyboard navigation per release
+
+### 10.4 E2E Tests (Post-MVP)
 - Full SSH connection
 - Multi-tab operations
 - SFTP file operations
