@@ -2,9 +2,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod crypto;
 mod db;
 mod errors;
+mod ssh;
 mod state;
+mod vault;
 
 use crate::state::AppState;
 use tauri::Manager;
@@ -31,13 +34,32 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // System
             commands::system::app_version,
+            // Hosts
             commands::host::get_hosts,
             commands::host::create_host,
             commands::host::update_host,
             commands::host::delete_host,
+            // Settings
             commands::settings::get_settings,
             commands::settings::set_setting,
+            // Vault
+            commands::vault::vault_status,
+            commands::vault::vault_setup,
+            commands::vault::vault_unlock,
+            commands::vault::vault_lock,
+            commands::vault::vault_check_idle,
+            commands::vault::vault_record_activity,
+            // Credentials
+            commands::credential::save_credential,
+            commands::credential::delete_credential,
+            // SSH
+            commands::ssh::ssh_connect,
+            commands::ssh::ssh_quick_connect,
+            commands::ssh::ssh_send,
+            commands::ssh::ssh_resize,
+            commands::ssh::ssh_disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

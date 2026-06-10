@@ -28,6 +28,19 @@ log = "0.4"
 env_logger = "0.11"
 parking_lot = "0.12"
 
+# Crypto & vault
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+subtle = "2.6"
+
+# SSH & async runtime
+russh = "0.45"
+russh-keys = "0.45"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "sync", "time", "net"] }
+async-trait = "0.1"
+futures = "0.3"
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 

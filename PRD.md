@@ -1,10 +1,10 @@
 # Product Requirements Document (PRD)
 ## SSH Client Desktop App — Self-Hosted, Local-First
 **Codename:** ShellMate
-**Version:** 1.2
+**Version:** 1.3
 **Author:** Matt
-**Last Updated:** 2026-06-09
-**Status:** Approved for development
+**Last Updated:** 2026-06-10
+**Status:** In development
 
 ---
 
@@ -540,13 +540,13 @@ CREATE TABLE settings (
 - [x] Zustand stores (host, tab, ui)
 - [x] ESLint + Prettier + Husky + CI scaffold
 
-### Milestone 2 — Core SSH (Week 2-3)
-- [ ] Vault: Argon2id + AES-256-GCM + zeroize
-- [ ] Vault setup/unlock/lock flow + recovery warning UI
-- [ ] SSH connection via password & key auth (russh)
-- [ ] xterm.js terminal integration with SSH I/O streaming
-- [ ] **Multi-tab session** *(core use case)*
-- [ ] Connection sharing strategy untuk multi-tab same-host
+### Milestone 2 — Core SSH (Week 2-3) ✅
+- [x] Vault: Argon2id + AES-256-GCM + zeroize
+- [x] Vault setup/unlock/lock flow + recovery warning UI
+- [x] SSH connection via password & key auth (russh)
+- [x] xterm.js terminal integration with SSH I/O streaming
+- [x] **Multi-tab session** *(core use case)*
+- [x] Connection sharing strategy untuk multi-tab same-host (1 conn/tab)
 
 ### Milestone 3 — Host Management (Week 4)
 - [ ] Host CRUD (Rust + React)

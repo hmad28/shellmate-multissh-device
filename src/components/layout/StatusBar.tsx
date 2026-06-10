@@ -2,14 +2,15 @@ import { Lock, Unlock } from 'lucide-react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { useTabStore } from '@/stores/tab-store';
-import { useUiStore } from '@/stores/ui-store';
+import { useVaultStore } from '@/stores/vault-store';
 
 const APP_VERSION = '0.1.0';
 
 export function StatusBar() {
   const tabs = useTabStore((s) => s.tabs);
   const activeTabId = useTabStore((s) => s.activeTabId);
-  const vaultUnlocked = useUiStore((s) => s.vaultUnlocked);
+  const vaultUnlocked = useVaultStore((s) => s.unlocked);
+  const lock = useVaultStore((s) => s.lock);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const leftLabel = activeTab
@@ -29,11 +30,21 @@ export function StatusBar() {
       </div>
 
       <div className="flex items-center gap-3">
-        <div
+        <button
+          type="button"
+          onClick={() => void lock()}
+          aria-label={
+            vaultUnlocked
+              ? strings.status.vaultUnlocked
+              : strings.status.vaultLocked
+          }
           className={cn(
-            'flex items-center gap-1',
-            vaultUnlocked ? 'text-status-connected' : 'text-fg-muted',
+            'flex items-center gap-1 rounded px-1 transition-colors',
+            vaultUnlocked
+              ? 'text-status-connected hover:bg-bg-elevated'
+              : 'text-fg-muted',
           )}
+          disabled={!vaultUnlocked}
         >
           {vaultUnlocked ? <Unlock size={12} /> : <Lock size={12} />}
           <span>
@@ -41,7 +52,7 @@ export function StatusBar() {
               ? strings.status.vaultUnlocked
               : strings.status.vaultLocked}
           </span>
-        </div>
+        </button>
         <span className="text-fg-subtle">v{APP_VERSION}</span>
       </div>
     </footer>

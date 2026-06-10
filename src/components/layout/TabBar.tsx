@@ -1,11 +1,26 @@
 import { Plus, X } from 'lucide-react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
+import { tauri } from '@/lib/tauri';
+import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
 import type { ConnectionStatus, Tab } from '@/types';
 
 export function TabBar() {
   const { tabs, activeTabId, addTab, closeTab, setActiveTab } = useTabStore();
+  const sessionByTab = useSshStore((s) => s.sessionByTab);
+  const unbind = useSshStore((s) => s.unbind);
+
+  const handleClose = (id: string) => {
+    const sessionId = sessionByTab[id];
+    if (sessionId) {
+      void tauri.ssh.disconnect(sessionId).catch(() => {
+        // already closed; ignore
+      });
+      unbind(id);
+    }
+    closeTab(id);
+  };
 
   return (
     <div
@@ -23,7 +38,7 @@ export function TabBar() {
             tab={tab}
             active={tab.id === activeTabId}
             onSelect={() => setActiveTab(tab.id)}
-            onClose={() => closeTab(tab.id)}
+            onClose={() => handleClose(tab.id)}
           />
         ))}
       </div>

@@ -28,38 +28,35 @@ ShellMate is built for developers and sysadmins who need:
 
 ## Features
 
-### Current (Phase 1 — Project Setup ✅)
+### Completed Milestones
 
-| Feature | Status |
-|---------|--------|
-| Tauri v2 + React 18 + Vite 6 scaffold | ✅ |
-| Custom title bar & window layout | ✅ |
-| Sidebar with host list & groups | ✅ |
-| Multi-tab session bar with status indicators | ✅ |
-| Status bar (vault state, connections) | ✅ |
-| Zustand stores (host, tab, UI) | ✅ |
-| SQLite schema + migration runner | ✅ |
-| Host CRUD (create, read, update, delete) | ✅ |
-| Settings store & commands | ✅ |
-| ESLint + Prettier + strict TypeScript | ✅ |
-| xterm.js dependencies | ✅ |
+#### Phase 1: Project Setup ✅
+- **Tauri v2 + React 18 + Vite 6 scaffold** with custom frameless window design and layouts.
+- **SQLite Database**: Local SQLite storage using `rusqlite` with auto-migration runner.
+- **App Layout & Shell**: Custom draggable title bar, sidebar with host lists, status bar, and tab session bar.
+- **State Management**: Lightweight state handling via Zustand stores (host, tab, UI, settings).
+- **Strict Development Standards**: Clean ESLint, Prettier, and strict TypeScript checks.
 
-### In Progress (Phase 2–4)
+#### Phase 2: Core SSH & Crypt/Vault ✅
+- **Cryptographic Vault**: OWASP-compliant Argon2id KDF key derivation and AES-256-GCM authenticated encryption.
+- **Secure Buffer**: Rust-backed `SecureBuffer` wrapping that zeroizes keys and credentials in memory when dropped.
+- **Vault Gates & Setup**: Gated app state requiring initial vault setup and master password unlocking, plus recovery warnings.
+- **SSH Session Manager (`russh`)**: Multi-session support, custom event loops, PTY integration (`xterm-256color`), and keepalive checks.
+- **Interactive Terminals**: xterm.js wrapper featuring ResizeObserver auto-fit, WebLinks, and PTY resize signals.
+- **QuickConnect**: Instant SSH access forms for fast connections without permanent credentials storing.
 
-- Vault: Argon2id + AES-256-GCM encryption
-- SSH connection via `russh` (password & key auth)
-- xterm.js terminal with I/O streaming
-- Multi-tab SSH sessions
-- Snippets / command shortcuts
-- SFTP file browser
-- Port forwarding
+### In Progress (Phase 3–5)
+- **Host Manager UI**: Full CRUD interface for hosts and groups.
+- **Advanced Vault & Security UI**: In-app idle lock settings and host key TOFU verification dialogs.
+- **SFTP File Browser**: Tabbed SFTP panel for file uploads, downloads, and directory listings.
+- **Port Forwarding**: Local, remote, and dynamic SSH tunneling configurations.
+- **Command Snippets**: Predefined command snippets library with sidebar shortcuts.
 
 ### Planned (Post-MVP)
-
-- Mobile app (Android & iOS via Tauri v2 mobile target)
-- Multi-device sync (iCloud, GDrive, S3, WebDAV)
-- Biometric unlock (Touch ID, Windows Hello)
-- Broadcast mode — send commands to many servers at once
+- **Mobile app** (Android & iOS targets via Tauri v2 mobile build).
+- **Multi-device Sync** (encrypted configs via iCloud, Google Drive, S3, or WebDAV).
+- **Biometric Unlock** (Touch ID, Face ID, Windows Hello).
+- **Broadcast Mode**: Send terminal inputs to multiple active SSH sessions simultaneously.
 
 ## Tech Stack
 
