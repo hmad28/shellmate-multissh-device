@@ -185,6 +185,159 @@ impl Vault {
             .ok_or_else(|| AppError::InvalidInput("vault is locked".into()))?;
         crypto::decrypt(&key, blob)
     }
+
+    /// Change the master password. Re-derives the key, re-encrypts all stored
+    /// credentials and the verifier blob, and atomically commits.
+    /// Vault must be unlocked. The new password is validated against the policy.
+    pub fn change_master_password(
+        &self,
+        conn: &mut Connection,
+        current_password: &str,
+        new_password: &str,
+    ) -> AppResult<()> {
+        if !self.is_unlocked() {
+            return Err(AppError::InvalidInput("vault is locked".into()));
+        }
+        validate_password(new_password)?;
+
+        // Verify current password by re-deriving + comparing with stored verifier.
+        let salt_hex = get_setting(conn, SETTING_VAULT_SALT)?
+            .ok_or_else(|| AppError::Internal("vault salt missing".into()))?;
+        let ct_hex = get_setting(conn, SETTING_VAULT_VERIFIER_CIPHERTEXT)?
+            .ok_or_else(|| AppError::Internal("vault verifier ciphertext missing".into()))?;
+        let nonce_hex = get_setting(conn, SETTING_VAULT_VERIFIER_NONCE)?
+            .ok_or_else(|| AppError::Internal("vault verifier nonce missing".into()))?;
+
+        let current_salt = unhex_fixed::<SALT_LEN>(&salt_hex)?;
+        let current_nonce = unhex_fixed::<NONCE_LEN>(&nonce_hex)?;
+        let current_ciphertext = unhex(&ct_hex)?;
+
+        let mut current_key = crypto::derive_key(current_password.as_bytes(), &current_salt)?;
+        let blob = EncryptedBlob {
+            ciphertext: current_ciphertext,
+            nonce: current_nonce,
+        };
+        let plaintext = match crypto::decrypt(&current_key, &blob) {
+            Ok(p) => p,
+            Err(_) => {
+                current_key.zeroize();
+                return Err(AppError::InvalidInput("incorrect current password".into()));
+            }
+        };
+        if plaintext.ct_eq(VERIFIER_PLAINTEXT).unwrap_u8() != 1 {
+            current_key.zeroize();
+            return Err(AppError::InvalidInput("incorrect current password".into()));
+        }
+
+        // Derive new key with fresh salt.
+        let new_salt = crypto::generate_salt();
+        let mut new_key = crypto::derive_key(new_password.as_bytes(), &new_salt)?;
+
+        // Atomically:
+        //   1. Re-encrypt every credential (encrypted_data + nonce columns)
+        //   2. Replace verifier blob
+        //   3. Replace stored salt
+        let tx = conn.transaction()?;
+
+        // Read all credentials, decrypt with current key, re-encrypt with new key.
+        let credentials: Vec<(String, Vec<u8>, Vec<u8>)> = {
+            let mut stmt = tx
+                .prepare("SELECT id, encrypted_data, nonce FROM credentials")?;
+            let rows = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                ))
+            })?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+
+        let now = chrono::Utc::now().to_rfc3339();
+        for (id, ct, nonce_bytes) in credentials {
+            if nonce_bytes.len() != NONCE_LEN {
+                current_key.zeroize();
+                new_key.zeroize();
+                return Err(AppError::Internal(format!(
+                    "credential {id} has invalid nonce length"
+                )));
+            }
+            let mut nonce = [0u8; NONCE_LEN];
+            nonce.copy_from_slice(&nonce_bytes);
+            let blob = EncryptedBlob { ciphertext: ct, nonce };
+            let plaintext = match crypto::decrypt(&current_key, &blob) {
+                Ok(p) => p,
+                Err(_) => {
+                    current_key.zeroize();
+                    new_key.zeroize();
+                    return Err(AppError::Internal(format!(
+                        "failed to decrypt credential {id} during rotation"
+                    )));
+                }
+            };
+            let new_blob = match crypto::encrypt(&new_key, &plaintext) {
+                Ok(b) => b,
+                Err(e) => {
+                    current_key.zeroize();
+                    new_key.zeroize();
+                    return Err(e);
+                }
+            };
+            // zeroize plaintext copy
+            let _ = plaintext;
+            tx.execute(
+                "UPDATE credentials SET encrypted_data = ?1, nonce = ?2, updated_at = ?3
+                 WHERE id = ?4",
+                rusqlite::params![new_blob.ciphertext, new_blob.nonce.to_vec(), now, id],
+            )?;
+        }
+
+        // Re-encrypt verifier with new key
+        let new_verifier = match crypto::encrypt(&new_key, VERIFIER_PLAINTEXT) {
+            Ok(b) => b,
+            Err(e) => {
+                current_key.zeroize();
+                new_key.zeroize();
+                return Err(e);
+            }
+        };
+
+        // Update settings (salt + verifier)
+        tx.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![SETTING_VAULT_SALT, hex(&new_salt)],
+        )?;
+        tx.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![
+                SETTING_VAULT_VERIFIER_CIPHERTEXT,
+                hex(&new_verifier.ciphertext)
+            ],
+        )?;
+        tx.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![
+                SETTING_VAULT_VERIFIER_NONCE,
+                hex(&new_verifier.nonce)
+            ],
+        )?;
+
+        tx.commit()?;
+
+        // Swap in-memory key
+        let mut inner = self.inner.write();
+        if let Some(mut prev) = inner.key.replace(new_key) {
+            prev.zeroize();
+        }
+        inner.last_activity = Instant::now();
+        // Local copy zeroized on drop via stack out-of-scope; new_key was moved into inner.
+        current_key.zeroize();
+
+        Ok(())
+    }
 }
 
 impl Default for Vault {

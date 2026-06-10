@@ -94,7 +94,7 @@ export function GroupForm({ open, onClose, group }: GroupFormProps) {
               aria-label="No color"
               className={`flex h-7 w-7 items-center justify-center rounded-full border ${
                 color === ''
-                  ? 'border-accent ring-2 ring-accent/40'
+                  ? 'ring-accent/40 border-accent ring-2'
                   : 'border-border-strong'
               } bg-bg-elevated text-xs text-fg-subtle`}
             >
@@ -126,7 +126,7 @@ export function GroupForm({ open, onClose, group }: GroupFormProps) {
         {error && (
           <p
             role="alert"
-            className="rounded-md border border-status-disconnected/40 bg-status-disconnected/10 p-2 text-xs text-status-disconnected"
+            className="border-status-disconnected/40 bg-status-disconnected/10 rounded-md border p-2 text-xs text-status-disconnected"
           >
             {error}
           </p>

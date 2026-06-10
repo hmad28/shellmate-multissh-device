@@ -5,46 +5,36 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Background hierarchy
+        // Read from CSS variables — set by ThemeStore on theme apply.
         bg: {
-          DEFAULT: '#0a0a0f', // app background
-          sidebar: '#111118',
-          panel: '#15151d',
-          elevated: '#1c1c26',
+          DEFAULT: 'var(--color-bg)',
+          sidebar: 'var(--color-bg-sidebar)',
+          panel: 'var(--color-bg-panel)',
+          elevated: 'var(--color-bg-elevated)',
         },
-        // Borders
         border: {
-          DEFAULT: '#26262f',
-          subtle: '#1e1e26',
-          strong: '#33333f',
+          DEFAULT: 'var(--color-border)',
+          subtle: 'var(--color-border-subtle)',
+          strong: 'var(--color-border-strong)',
         },
-        // Text
         fg: {
-          DEFAULT: '#e8e8ea',
-          muted: '#9a9aa3',
-          subtle: '#6b6b75',
+          DEFAULT: 'var(--color-fg)',
+          muted: 'var(--color-fg-muted)',
+          subtle: 'var(--color-fg-subtle)',
         },
-        // Accent
         accent: {
-          DEFAULT: '#3b82f6',
-          hover: '#60a5fa',
-          subtle: '#1e3a8a',
+          DEFAULT: 'var(--color-accent)',
+          hover: 'var(--color-accent-hover)',
+          subtle: 'var(--color-accent-subtle)',
         },
-        // Status
         status: {
-          connected: '#22c55e',
-          connecting: '#f59e0b',
-          disconnected: '#ef4444',
+          connected: 'var(--color-status-connected)',
+          connecting: 'var(--color-status-connecting)',
+          disconnected: 'var(--color-status-disconnected)',
         },
       },
       fontFamily: {
-        mono: [
-          'JetBrains Mono',
-          'Fira Code',
-          'Consolas',
-          'Monaco',
-          'monospace',
-        ],
+        mono: ['var(--font-mono)'],
         sans: [
           'Inter',
           '-apple-system',

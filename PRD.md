@@ -648,13 +648,13 @@ ShellMate v1.0 dikerjakan **scope-driven** (no fixed timeline). Tiap milestone s
 - [x] Save credentials via vault, connect from sidebar
 - [x] Host validation (frontend + backend sync)
 
-### Phase 4 — Productivity & Settings
-- [ ] Snippets panel (CRUD, search, execute to terminal, template variables)
-- [ ] Settings dialog (theme, font, shortcuts, keepalive, scrollback)
-- [ ] Custom themes (terminal + UI tokens)
-- [ ] Keyboard shortcuts (configurable)
-- [ ] Auto-lock UX wired (frontend polls `vault_check_idle`)
-- [ ] Master password change with full re-encryption
+### Phase 4 — Productivity & Settings ✅ (2026-06-10)
+- [x] Snippets panel (CRUD, search, execute to terminal, template variables)
+- [x] Settings dialog (theme, font, shortcuts, keepalive, scrollback)
+- [x] Custom themes — 3 built-ins via CSS variables; storage backend ready for custom themes
+- [ ] Configurable keyboard shortcuts — deferred to Phase 14 polish (defaults work)
+- [x] Auto-lock UX wired (frontend polls `vault_check_idle`)
+- [x] Master password change with full re-encryption
 
 ### Phase 5 — File Transfer & Network
 - [ ] SFTP file browser (browse, upload, download, rename, delete, mkdir)

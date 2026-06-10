@@ -56,13 +56,20 @@ ShellMate is built for developers, DevOps, and sysadmins who need:
 - **Connect from Sidebar**: One-click connect uses saved credentials via vault.
 - **Empty States**: Friendly UX for no hosts, no groups, no search results.
 
-### Roadmap (Phase 4 → 14)
+#### Phase 4: Productivity & Settings ✅
+- **Snippets**: CRUD with template variables (`{{username}}`, `{{host}}`, `{{port}}`, `{{label}}`), search, execute-to-active-session.
+- **Settings Dialog**: Tabbed UI (General, Terminal, Vault, Theme).
+- **Theme System**: 3 built-in themes (ShellMate Dark, Light, High Contrast) via CSS variables. Tailwind reads tokens from `var(--color-*)` so all components retheme instantly.
+- **Custom Themes**: storage backend + API ready (full color-picker editor lands in Phase 14 polish).
+- **Auto-Lock**: Frontend polls `vault_check_idle` every 15s, throttled activity ping every 60s on user input.
+- **Master Password Change**: Atomic re-encryption of all credentials in a single transaction with old/new key zeroize on every error path.
+
+### Roadmap (Phase 5 → 14)
 
 ShellMate is delivered scope-driven (no fixed timeline). Each phase ships when acceptance criteria are met.
 
 | Phase | Area | Highlights |
 |-------|------|-----------|
-| 4 | Productivity & Settings | Snippets, settings dialog, custom themes, configurable shortcuts, master password change |
 | 5 | File Transfer & Network | SFTP browser, drag-and-drop upload, port forwarding (local & remote) |
 | 6 | Network Hardening | Known hosts UI, auto-reconnect, **Mosh support**, **broadcast mode** |
 | 7 | Full-DB Encryption | **SQLCipher** migration, defense in depth on top of per-credential AES-GCM |
@@ -72,7 +79,7 @@ ShellMate is delivered scope-driven (no fixed timeline). Each phase ships when a
 | 11 | Team Vault | Shared host configs via team key, member management, key rotation |
 | 12 | Plugin System | Wasmtime sandbox, capability-based permissions, signed manifests |
 | 13 | Audit Log | Opt-in per host, encrypted, exportable signed JSONL |
-| 14 | Polish & Distribution | Code signing (Authenticode + macOS notarization), Tauri auto-updater, full a11y pass |
+| 14 | Polish & Distribution | Code signing (Authenticode + macOS notarization), Tauri auto-updater, full a11y pass, configurable shortcuts editor, custom theme editor, tag autocomplete, markdown notes preview |
 
 For full details see [PRD.md §10 Milestones](PRD.md) and [docs/01-development-plan.md](docs/01-development-plan.md).
 
@@ -155,16 +162,20 @@ shellmate/
 │   │   ├── connect/            # Quick connection forms
 │   │   ├── hosts/              # Host & group management UI components
 │   │   ├── layout/             # App shell (TitleBar, Sidebar, StatusBar, TabBar)
+│   │   ├── settings/           # Tabbed settings dialog & panels (General, Terminal, Vault, Theme)
+│   │   ├── snippets/           # Snippets list, form, and interactive execute panel
 │   │   ├── terminal/           # xterm.js terminal view and subscription
 │   │   ├── ui/                 # Reusable UI primitives (Button, Modal, Form, Confirm)
 │   │   └── vault/              # Vault security gate forms
-│   ├── stores/                 # Zustand state stores (host, tab, ui, vault)
-│   ├── lib/                    # Utilities & typed Tauri invoke wrappers
+│   ├── hooks/                  # React custom hooks (useAutoLock, etc.)
+│   ├── stores/                 # Zustand state stores (host, tab, ui, vault, settings, snippet)
+│   ├── themes/                 # Built-in theme configurations & variables application logic
+│   ├── lib/                    # Utilities, snippet parsing, and typed Tauri invoke wrappers
 │   ├── types/                  # TypeScript interface definitions
 │   └── styles/                 # Tailwind global configurations
 ├── src-tauri/                  # Rust backend (Tauri native wrapper)
 │   ├── src/
-│   │   ├── commands/           # IPC command routes (host, group, credential, vault, ssh)
+│   │   ├── commands/           # IPC command routes (host, group, credential, vault, ssh, snippet, theme)
 │   │   ├── db/                 # SQLite integration, schema definition, and migration runner
 │   │   ├── crypto/             # AES-256-GCM encryption and Argon2id KDF primitives
 │   │   ├── ssh/                # russh multi-session tasks and PTY managers

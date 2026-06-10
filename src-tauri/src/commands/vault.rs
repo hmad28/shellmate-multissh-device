@@ -57,3 +57,15 @@ pub async fn vault_record_activity(state: State<'_, AppState>) -> AppResult<()> 
     state.vault.record_activity();
     Ok(())
 }
+
+#[tauri::command]
+pub async fn vault_change_master_password(
+    state: State<'_, AppState>,
+    current_password: String,
+    new_password: String,
+) -> AppResult<()> {
+    let mut conn = state.db.lock();
+    state
+        .vault
+        .change_master_password(&mut conn, &current_password, &new_password)
+}

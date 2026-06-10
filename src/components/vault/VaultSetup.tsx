@@ -42,7 +42,7 @@ export function VaultSetup() {
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
       <div
         className={cn(
-          'flex gap-3 rounded-md border border-status-connecting/40 bg-status-connecting/10 p-3 text-xs',
+          'border-status-connecting/40 bg-status-connecting/10 flex gap-3 rounded-md border p-3 text-xs',
         )}
         role="note"
       >
@@ -87,7 +87,7 @@ export function VaultSetup() {
       {(localError || error) && (
         <p
           role="alert"
-          className="rounded-md border border-status-disconnected/40 bg-status-disconnected/10 p-2 text-xs text-status-disconnected"
+          className="border-status-disconnected/40 bg-status-disconnected/10 rounded-md border p-2 text-xs text-status-disconnected"
         >
           {localError ?? error}
         </p>

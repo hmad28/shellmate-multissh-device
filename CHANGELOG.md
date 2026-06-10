@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Phase 4: Productivity & Settings (2026-06-10)
+
+**Backend** (`src-tauri/`):
+- `db/schema.rs` migration `002_themes` adds `themes` table (id, name, base, definition JSON, is_builtin flag, timestamps)
+- `commands/snippet.rs` — full CRUD: `get_snippets`, `create_snippet`, `update_snippet`, `delete_snippet` with title+command validation, JSON-serialized tags
+- `commands/theme.rs` — `get_themes`, `save_theme` (UPSERT for custom only, rejects modifying builtins), `delete_theme` (rejects builtins)
+- `vault/mod.rs::change_master_password` — atomic re-encryption:
+  - Verifies current password via constant-time compare against verifier blob
+  - Derives new key with fresh salt (via `Argon2id`)
+  - Single SQLite transaction: re-encrypts every credential, replaces verifier blob, replaces stored salt
+  - Zeroizes both old and new keys on every error path
+  - Swaps in-memory key only after `tx.commit()` succeeds
+- `commands/vault.rs::vault_change_master_password` Tauri command
+- All commands wired into `lib.rs`
+
+**Frontend** (`src/`):
+- Types: `types/snippet.ts`, `types/theme.ts` (`ThemeBase`, `ThemeDefinition`, `Theme`, `ThemeInput`)
+- Theme system:
+  - `themes/builtin.ts` — 3 ThemeDefinition objects (ShellMate Dark, ShellMate Light, High Contrast)
+  - `applyTheme()` sets CSS variables on `<html>` + toggles Tailwind `dark` class
+  - `tailwind.config.js` rewritten to read all colors from `var(--color-*)`
+  - `styles/globals.css` provides default `:root` variables (dark theme baseline)
+- Stores:
+  - `stores/snippet-store.ts` — load/add/update/remove + searchQuery
+  - `stores/settings-store.ts` — full settings state (themeId, fontSize, scrollback, autolockSecs, cursorStyle, cursorBlink) + theme save/delete + `resolveTheme(id)` helper
+- Lib:
+  - `lib/snippet-expand.ts` — `expandSnippet`, `extractPlaceholders`, `unknownPlaceholders`
+  - `lib/tauri.ts` extended for `snippets`, `themes`, `vault.changeMasterPassword`
+- Hook:
+  - `hooks/useAutoLock.ts` — polls `vault_check_idle` every 15s; throttled activity ping every 60s on user input (mousedown/keydown/wheel/touchstart)
+- Components:
+  - `components/snippets/SnippetForm.tsx` — modal CRUD, multiline command, tag parsing
+  - `components/snippets/SnippetPanel.tsx` — list/search/execute UI; warns when no active session or unknown placeholders detected; sends `command\n` to active session via `tauri.ssh.send`
+  - `components/settings/SettingsDialog.tsx` — tabbed dialog (General/Terminal/Vault/Theme)
+  - `components/settings/GeneralSettingsTab.tsx` — app/version/license info
+  - `components/settings/TerminalSettingsTab.tsx` — font size, scrollback, cursor style, blink
+  - `components/settings/VaultSettingsTab.tsx` — autolock dropdown, "Lock now" button, master password change form with current/new/confirm + validation + success message
+  - `components/settings/ThemeSettingsTab.tsx` — theme grid with terminal palette swatch preview, apply/delete actions; built-ins non-deletable
+- Wiring:
+  - `Sidebar.tsx` — Snippets/Settings panel buttons toggle activePanel back to 'hosts' when clicked again
+  - `ContentArea.tsx` — renders `SnippetPanel` for activePanel='snippets'; renders `SettingsDialog` modal for activePanel='settings'
+  - `App.tsx` — loads `settings-store` on mount (before vault), wires `useAutoLock` hook
+- i18n strings extended for `snippets.*` and `settings.*`
+
+### Verified
+- `npm run typecheck` — pass
+- `npm run lint` — pass
+- `npm run format:check` — pass
+- `npm run build` — pass (559 KB / 154 KB gzipped, within 500 KB gzipped budget)
+- `cargo build` — pass (incremental 0.76s, 8 forward-compat warnings unchanged)
+
+### Decided During Phase 4
+- **Theme architecture**: CSS variables on `<html>`, Tailwind reads via `var(--color-*)`. All existing components retheme automatically. Toggle `dark` class for Tailwind dark variant compatibility.
+- **3 built-in themes**: ShellMate Dark (original), ShellMate Light (inverted with same hue), High Contrast (WCAG AAA-ready, yellow-on-black).
+- **Custom theme editor UI**: backend + storage shipped (user can call `tauri.themes.save` programmatically); full color-picker editor UI **deferred to Phase 14 polish**.
+- **Configurable keyboard shortcuts**: deferred to Phase 14. Default Phase 1 shortcuts remain hardcoded for now.
+- **Master password change atomicity**: single SQLite transaction; rollback on any error; both keys zeroized on every failure path.
+- **Auto-lock policy**: frontend polls 15s rather than backend pushing events. Activity ping throttled to once per 60s.
+- **Settings storage**: key-value rows in existing `settings` table with namespace prefixes (`ui.theme.id`, `terminal.font_size`, etc.).
+- **Snippet placeholder strategy**: built-in vars auto-expand from active host (host, username, port, label). Unknown vars trigger UI warning before execute — prevents footguns.
+
+### Carried over to Phase 14
+- Tag autocomplete on HostForm
+- Markdown notes preview
+- Configurable keyboard shortcuts editor
+- Custom theme color-picker editor
+
+---
+
 ### Added — Phase 3: Host Management & Persistence (2026-06-10)
 
 **Backend** (`src-tauri/src/commands/`):

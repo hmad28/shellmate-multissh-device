@@ -2,6 +2,8 @@ pub mod credential;
 pub mod group;
 pub mod host;
 pub mod settings;
+pub mod snippet;
 pub mod ssh;
 pub mod system;
+pub mod theme;
 pub mod vault;

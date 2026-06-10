@@ -43,7 +43,7 @@ export function VaultUnlock() {
       {error && (
         <p
           role="alert"
-          className="rounded-md border border-status-disconnected/40 bg-status-disconnected/10 p-2 text-xs text-status-disconnected"
+          className="border-status-disconnected/40 bg-status-disconnected/10 rounded-md border p-2 text-xs text-status-disconnected"
         >
           {error}
         </p>

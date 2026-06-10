@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Group, GroupInput, Host, HostInput } from '@/types/host';
 import type { Setting } from '@/types/settings';
+import type { Snippet, SnippetInput } from '@/types/snippet';
+import type { Theme, ThemeInput } from '@/types/theme';
 import type {
   ConnectByHostInput,
   QuickConnectInput,
@@ -30,6 +32,19 @@ export const tauri = {
       invoke<Group>('update_group', { id, input }),
     delete: (id: string) => invoke<void>('delete_group', { id }),
   },
+  snippets: {
+    list: () => invoke<Snippet[]>('get_snippets'),
+    create: (input: SnippetInput) =>
+      invoke<Snippet>('create_snippet', { input }),
+    update: (id: string, input: SnippetInput) =>
+      invoke<Snippet>('update_snippet', { id, input }),
+    delete: (id: string) => invoke<void>('delete_snippet', { id }),
+  },
+  themes: {
+    list: () => invoke<Theme[]>('get_themes'),
+    save: (input: ThemeInput) => invoke<Theme>('save_theme', { input }),
+    delete: (id: string) => invoke<void>('delete_theme', { id }),
+  },
   settings: {
     list: () => invoke<Setting[]>('get_settings'),
     set: (key: string, value: string) =>
@@ -42,6 +57,11 @@ export const tauri = {
     lock: () => invoke<void>('vault_lock'),
     checkIdle: () => invoke<boolean>('vault_check_idle'),
     recordActivity: () => invoke<void>('vault_record_activity'),
+    changeMasterPassword: (currentPassword: string, newPassword: string) =>
+      invoke<void>('vault_change_master_password', {
+        currentPassword,
+        newPassword,
+      }),
   },
   credentials: {
     save: (credType: 'password' | 'private_key', plaintext: string) =>

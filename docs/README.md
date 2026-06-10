@@ -81,7 +81,7 @@ ShellMate v1.0 is a **production release**, not an MVP. Scope spans 14 phases de
 | 1 | Complete (2026-06-09) | Project Setup |
 | 2 | Complete (2026-06-10) | Core SSH + Vault + Terminal |
 | 3 | Complete (2026-06-10) | Host Management & Persistence |
-| 4 | Pending | Productivity & Settings (snippets, themes, shortcuts) |
+| 4 | Complete (2026-06-10) | Productivity & Settings (snippets, themes, settings, auto-lock, password change) |
 | 5 | Pending | File Transfer & Network (SFTP, port forward) |
 | 6 | Pending | Network Hardening (known hosts, Mosh, broadcast) |
 | 7 | Pending | Full-DB Encryption (SQLCipher) |

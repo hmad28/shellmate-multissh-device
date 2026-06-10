@@ -48,6 +48,15 @@ pub fn run() {
             commands::group::update_group,
             commands::group::delete_group,
             commands::group::move_host_to_group,
+            // Snippets
+            commands::snippet::get_snippets,
+            commands::snippet::create_snippet,
+            commands::snippet::update_snippet,
+            commands::snippet::delete_snippet,
+            // Themes
+            commands::theme::get_themes,
+            commands::theme::save_theme,
+            commands::theme::delete_theme,
             // Settings
             commands::settings::get_settings,
             commands::settings::set_setting,
@@ -58,6 +67,7 @@ pub fn run() {
             commands::vault::vault_lock,
             commands::vault::vault_check_idle,
             commands::vault::vault_record_activity,
+            commands::vault::vault_change_master_password,
             // Credentials
             commands::credential::save_credential,
             commands::credential::delete_credential,

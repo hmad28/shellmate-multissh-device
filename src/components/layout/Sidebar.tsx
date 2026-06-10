@@ -43,14 +43,18 @@ export function Sidebar() {
           label={strings.sidebar.snippets}
           panel="snippets"
           active={activePanel === 'snippets'}
-          onClick={() => setActivePanel('snippets')}
+          onClick={() =>
+            setActivePanel(activePanel === 'snippets' ? 'hosts' : 'snippets')
+          }
         />
         <PanelButton
           icon={<SettingsIcon size={14} />}
           label={strings.sidebar.settings}
           panel="settings"
           active={activePanel === 'settings'}
-          onClick={() => setActivePanel('settings')}
+          onClick={() =>
+            setActivePanel(activePanel === 'settings' ? 'hosts' : 'settings')
+          }
         />
       </div>
     </aside>

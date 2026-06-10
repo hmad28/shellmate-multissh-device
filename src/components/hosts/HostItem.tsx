@@ -228,7 +228,7 @@ function ContextMenu({
           className={cn(
             'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs',
             item.variant === 'danger'
-              ? 'text-status-disconnected hover:bg-status-disconnected/10'
+              ? 'hover:bg-status-disconnected/10 text-status-disconnected'
               : 'text-fg hover:bg-bg-panel',
           )}
         >

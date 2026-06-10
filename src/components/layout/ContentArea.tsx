@@ -1,14 +1,54 @@
+import { useState } from 'react';
 import { strings } from '@/i18n/en';
 import { QuickConnect } from '@/components/connect/QuickConnect';
+import { SettingsDialog } from '@/components/settings/SettingsDialog';
+import { SnippetPanel } from '@/components/snippets/SnippetPanel';
 import { Terminal } from '@/components/terminal/Terminal';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
+import { useUiStore } from '@/stores/ui-store';
 
 /**
- * ContentArea — renders the active tab's terminal or, if no tab is active,
- * the QuickConnect form for one-off SSH sessions.
+ * ContentArea — renders the active panel:
+ *   - 'hosts' (default): active terminal or QuickConnect form
+ *   - 'snippets': SnippetPanel
+ *   - 'settings': SettingsDialog (modal-style takeover; but we render
+ *     it in a centered surface for keyboard nav; closing returns to hosts)
  */
 export function ContentArea() {
+  const activePanel = useUiStore((s) => s.activePanel);
+  const setActivePanel = useUiStore((s) => s.setActivePanel);
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Settings panel button → open dialog
+  if (activePanel === 'settings' && !settingsOpen) {
+    setSettingsOpen(true);
+  }
+
+  if (activePanel === 'snippets') {
+    return (
+      <main className="flex flex-1 overflow-hidden bg-bg">
+        <SnippetPanel />
+      </main>
+    );
+  }
+
+  return (
+    <>
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+          if (activePanel === 'settings') setActivePanel('hosts');
+        }}
+      />
+      <HostsContent />
+    </>
+  );
+}
+
+function HostsContent() {
   const tabs = useTabStore((s) => s.tabs);
   const activeTabId = useTabStore((s) => s.activeTabId);
   const sessionByTab = useSshStore((s) => s.sessionByTab);
@@ -36,9 +76,6 @@ export function ContentArea() {
     );
   }
 
-  // Render ALL bound terminals, hiding inactive ones via CSS so xterm doesn't
-  // tear down state when switching tabs. Each Terminal is keyed by sessionId
-  // so it remounts only when the underlying session id changes.
   return (
     <main className="relative flex flex-1 overflow-hidden bg-bg">
       {tabs.map((tab) => {

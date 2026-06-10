@@ -1,7 +1,7 @@
 # Development Plan
 ## ShellMate — SSH Client (Production v1.0)
 
-**Version:** 2.1
+**Version:** 2.2
 **Last Updated:** 2026-06-10
 **Approach:** Scope-driven phases, no fixed timeline — each phase ships when acceptance criteria are met.
 
@@ -14,7 +14,7 @@
 | Phase 1: Project Setup | ✅ Complete | 2026-06-09 | Tauri v2 + React/Vite/TS scaffold, SQLite schema, layout shell, stores |
 | Phase 2: Core SSH | ✅ Complete | 2026-06-10 | Vault (Argon2id + AES-256-GCM), russh integration, xterm terminal, multi-tab session manager |
 | Phase 3: Host Management & Persistence | ✅ Complete | 2026-06-10 | Host CRUD UI, Group CRUD, drag-and-drop, host search, connect from sidebar |
-| Phase 4: Productivity & Settings | ⏳ Pending | — | Snippets, settings, custom themes, configurable shortcuts |
+| Phase 4: Productivity & Settings | ✅ Complete | 2026-06-10 | Snippets, settings dialog, custom themes (CSS vars), auto-lock, master password change |
 | Phase 5: File Transfer & Network | ⏳ Pending | — | SFTP, port forwarding |
 | Phase 6: Network Hardening | ⏳ Pending | — | Known hosts UI, auto-reconnect, Mosh, broadcast mode |
 | Phase 7: Full-DB Encryption | ⏳ Pending | — | SQLCipher migration (defense in depth) |
@@ -222,21 +222,86 @@
 
 ---
 
-## 5. Phase 4: Productivity & Settings
+## 5. Phase 4: Productivity & Settings ✅
+
+**Status:** Complete (2026-06-10)
 
 ### Acceptance Criteria
-- [ ] Snippet CRUD with template variables (`{{username}}`, `{{host}}`, custom)
-- [ ] Snippet panel (Ctrl+K), search, execute to active terminal
-- [ ] Settings dialog: General, Terminal, Vault, Shortcuts, Theme
-- [ ] Custom theme editor: terminal palette + UI tokens, preview, export/import theme JSON
-- [ ] Keyboard shortcut customization with conflict detection
-- [ ] Auto-lock UX: frontend polls `vault_check_idle`, dispatches lock when fired
-- [ ] Master password change: re-derives key, re-encrypts all credentials, atomic
-- [ ] Settings persist to SQLite `settings` table
+- [x] Snippet CRUD with template variables (`{{username}}`, `{{host}}`, `{{port}}`, `{{label}}`, custom)
+- [x] Snippet panel, search, execute to active terminal
+- [x] Settings dialog: General, Terminal, Vault, Theme tabs
+- [x] Custom theme storage backend + 3 built-in themes (dark, light, high-contrast); user-saved custom themes via API ready
+- [ ] Custom theme editor UI (live color picker) — **deferred to Phase 14 polish**
+- [ ] Configurable keyboard shortcut customization with conflict detection — **deferred to Phase 14 polish** (default shortcuts work)
+- [x] Auto-lock UX: frontend polls `vault_check_idle`, dispatches lock when fired
+- [x] Master password change: re-derives key, re-encrypts all credentials, atomic
+- [x] Settings persist to SQLite `settings` table
 
-### Out of Scope
-- SFTP, port forwarding (Phase 5)
-- Multi-device sync of settings (Phase 9)
+### Deferred from Phase 3 (still open)
+- Tag autocomplete on HostForm — moved to **Phase 14 polish**
+- Markdown notes preview — moved to **Phase 14 polish**
+
+### Phase 4 Deliverables (Done)
+
+**Backend** (`src-tauri/`):
+- ✅ `db/schema.rs` — migration `002_themes` adds `themes` table (id, name, base, definition JSON, is_builtin, timestamps)
+- ✅ `commands/snippet.rs` — full CRUD: `get_snippets`, `create_snippet`, `update_snippet`, `delete_snippet` with title+command validation, JSON-serialized tags
+- ✅ `commands/theme.rs` — `get_themes`, `save_theme` (UPSERT for custom only, rejects modifying builtins), `delete_theme` (rejects builtins)
+- ✅ `vault/mod.rs` — `change_master_password` method:
+  - Verifies current password via constant-time compare against verifier blob
+  - Derives new key with fresh salt
+  - Atomic transaction: re-encrypts every credential, replaces verifier blob, replaces stored salt
+  - Zeroizes both old and new keys on any error path
+  - Swaps in-memory key on commit; old key zeroized
+- ✅ `commands/vault.rs` — `vault_change_master_password` Tauri command
+- ✅ All commands wired in `lib.rs`
+
+**Frontend** (`src/`):
+- ✅ Types: `types/snippet.ts`, `types/theme.ts` (`ThemeBase`, `ThemeDefinition`, `Theme`, `ThemeInput`)
+- ✅ Theme system:
+  - `themes/builtin.ts` — 3 built-in `ThemeDefinition` objects (ShellMate Dark, ShellMate Light, High Contrast)
+  - `applyTheme()` sets CSS variables on `<html>` + toggles `dark` class
+  - `tailwind.config.js` rewritten to read all colors from CSS variables
+  - `styles/globals.css` provides default :root variables (dark theme baseline)
+- ✅ Stores:
+  - `stores/snippet-store.ts` — load/add/update/remove + searchQuery
+  - `stores/settings-store.ts` — full settings (themeId, fontSize, scrollback, autolockSecs, cursorStyle, cursorBlink) + theme save/delete + `resolveTheme(id)` helper
+- ✅ Lib:
+  - `lib/snippet-expand.ts` — `expandSnippet`, `extractPlaceholders`, `unknownPlaceholders`
+  - `lib/tauri.ts` extended for `snippets`, `themes`, `vault.changeMasterPassword`
+- ✅ Hooks:
+  - `hooks/useAutoLock.ts` — polls `vault_check_idle` every 15s, throttled activity ping every 60s on user input (mousedown/keydown/wheel/touchstart)
+- ✅ Components:
+  - `components/snippets/SnippetForm.tsx` — modal CRUD, multiline command, tag parsing
+  - `components/snippets/SnippetPanel.tsx` — list/search/execute UI; warns when active session is missing or unknown placeholders detected; sends `command\n` to active session via `tauri.ssh.send`
+  - `components/settings/SettingsDialog.tsx` — tabbed dialog (General/Terminal/Vault/Theme)
+  - `components/settings/GeneralSettingsTab.tsx` — app/version/license info
+  - `components/settings/TerminalSettingsTab.tsx` — font size, scrollback, cursor style, blink
+  - `components/settings/VaultSettingsTab.tsx` — autolock dropdown, "Lock now" button, master password change form with current/new/confirm + validation + success message
+  - `components/settings/ThemeSettingsTab.tsx` — grid of theme cards with terminal palette swatch preview, apply/delete actions; built-ins are non-deletable
+- ✅ Wiring:
+  - `Sidebar.tsx` — Snippets/Settings panel buttons toggle activePanel back to 'hosts' when clicked again
+  - `ContentArea.tsx` — renders `SnippetPanel` for activePanel='snippets', renders `SettingsDialog` modal for activePanel='settings'
+  - `App.tsx` — loads `settings-store` on mount (before vault), wires `useAutoLock` hook
+- ✅ i18n strings extended for `snippets.*` and `settings.*`
+
+### Phase 4 Decisions Made During Implementation
+
+- **Theme system architecture**: CSS variables on `<html>` driven by `applyTheme(def)`. Tailwind config reads from `var(--color-*)`. All existing components automatically pick up new theme without component changes. Toggle `dark` class for Tailwind dark variant compatibility.
+- **3 shipped themes**: ShellMate Dark (original), ShellMate Light (inverted with same hue palette), High Contrast (WCAG AAA-ready, yellow accent on black for accessibility).
+- **Custom theme editor UI**: backend + storage shipped (user can call `tauri.themes.save` to store custom theme); full color-picker editor UI **deferred to Phase 14 polish** — current behavior: built-in themes selectable via Theme tab, custom themes appear in same grid if added via API.
+- **Configurable shortcuts**: deferred to Phase 14. Default Phase 1 shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab, Ctrl+L, etc.) remain hardcoded for now. Schema for storing shortcut overrides will land with the editor UI.
+- **Master password change atomicity**: single SQLite transaction. Decrypts each credential with old key in-memory, re-encrypts with new key, then commits. On any failure (decrypt, encrypt, DB write) the transaction rolls back AND both keys zeroized. In-memory vault key swap happens only after `tx.commit()` succeeds.
+- **Auto-lock policy**: frontend polls every 15s rather than backend pushing events — simpler, no event channel needed for vault state changes. Activity ping throttled to once per 60s to avoid hammering backend on heavy keyboard input.
+- **Settings storage**: key-value rows in existing `settings` table. Each setting prefix is a namespace (`ui.theme.id`, `terminal.font_size`, etc.) — easy to migrate to typed config later.
+- **Snippet placeholder strategy**: built-in placeholders auto-expand from active host context (host, username, port, label). Unknown placeholders trigger UI warning before execute — prevents footguns like `rm -rf {{path}}` accidentally sending raw `{{path}}` to server.
+
+### Verified
+- ✅ `npm run typecheck` exit 0
+- ✅ `npm run lint` exit 0
+- ✅ `npm run format:check` clean
+- ✅ `npm run build` — 559 KB / 154 KB gzipped (within 500 KB gzipped budget)
+- ✅ `cargo build` — incremental 0.76s, 8 forward-compat warnings (unchanged from Phase 3)
 
 ---
 

@@ -3,9 +3,10 @@
 /// Each migration is a single string applied in order. Future migrations should
 /// be added to the array; the migration runner records applied versions in the
 /// `_migrations` table.
-pub const MIGRATIONS: &[(&str, &str)] = &[(
-    "001_initial_schema",
-    r#"
+pub const MIGRATIONS: &[(&str, &str)] = &[
+    (
+        "001_initial_schema",
+        r#"
     CREATE TABLE IF NOT EXISTS groups (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -77,4 +78,21 @@ pub const MIGRATIONS: &[(&str, &str)] = &[(
         value TEXT NOT NULL
     );
     "#,
-)];
+    ),
+    (
+        "002_themes",
+        r#"
+    CREATE TABLE IF NOT EXISTS themes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        base TEXT NOT NULL CHECK (base IN ('dark', 'light')),
+        definition TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_themes_is_builtin ON themes(is_builtin);
+    "#,
+    ),
+];
