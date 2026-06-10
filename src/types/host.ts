@@ -34,3 +34,10 @@ export interface Group {
   parentId: string | null;
   sortOrder: number;
 }
+
+export interface GroupInput {
+  name: string;
+  color: string | null;
+  parentId: string | null;
+  sortOrder: number | null;
+}

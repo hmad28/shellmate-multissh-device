@@ -1,8 +1,8 @@
 # Frontend Plan
-## ShellMate - React + Vite + Tailwind CSS
+## ShellMate — React + Vite + Tailwind (v1.0 Production)
 
-**Version:** 1.1
-**Last Updated:** 2026-06-09
+**Version:** 2.0
+**Last Updated:** 2026-06-10
 
 ---
 
@@ -549,7 +549,7 @@ const shortcuts: Record<string, () => void> = {
 ### 9.2 Architecture
 - Lightweight approach for MVP: single `src/i18n/en.ts` with typed string keys
 - No runtime translation library yet (avoid bundle bloat)
-- Structure ready for `react-i18next` or `next-intl` swap-in post-MVP
+- Structure ready for `react-i18next` or `next-intl` swap-in post-1.0
 
 ```typescript
 // src/i18n/en.ts
@@ -582,7 +582,7 @@ import { strings } from '@/i18n/en';
 <button>{strings.hosts.add}</button>
 ```
 
-### 9.3 Post-MVP Plan
+### 9.3 Post-1.0 Plan
 - Bahasa Indonesia translation (`src/i18n/id.ts`)
 - Locale detection from OS / user setting
 - Plural forms via ICU MessageFormat or `react-i18next`
@@ -613,10 +613,251 @@ import { strings } from '@/i18n/en';
 - axe-core integration via Vitest
 - Manual keyboard navigation per release
 
-### 10.4 E2E Tests (Post-MVP)
+### 10.4 E2E Tests (Phase 14)
 - Full SSH connection
 - Multi-tab operations
 - SFTP file operations
+
+---
+
+## 11. Mobile UX Architecture (Phase 10)
+
+### 11.1 Adaptive Layout
+
+```typescript
+// src/hooks/useFormFactor.ts
+export function useFormFactor(): 'desktop' | 'tablet' | 'mobile' {
+  const [w, h] = useViewport();
+  if (w < 600) return 'mobile';
+  if (w < 1024) return 'tablet';
+  return 'desktop';
+}
+```
+
+Layout components branch on form factor at the layout root, not deep in tree, to keep components reusable.
+
+### 11.2 Mobile-Specific Components
+
+```
+src/components/mobile/
+├── MobileLayout.tsx           # Bottom-sheet nav, full-screen content
+├── ExtendedKeyBar.tsx         # Esc, Tab, Ctrl, Alt, ↑↓←→, |, ~, -, /
+├── MobileTabSwitcher.tsx      # Swipeable tab list
+├── BottomSheetSidebar.tsx     # Hosts list as bottom sheet
+├── MobileSftpModal.tsx        # Full-screen SFTP browser
+└── TouchTerminal.tsx          # Terminal with pinch-to-zoom + tap-to-show-toolbar
+```
+
+### 11.3 Gesture Handling
+
+| Gesture | Action |
+|---------|--------|
+| Swipe left/right on terminal | Switch tabs |
+| Pinch on terminal | Adjust font size |
+| Long-press tab | Show context menu (close, broadcast toggle) |
+| Pull-down on host list | Refresh / sync now |
+| Two-finger tap | Toggle extended key bar visibility |
+
+### 11.4 Background Lifecycle
+
+- iOS: app backgrounding → kept alive briefly via Background Modes (audio session trick) to allow short reconnect window
+- Android: foreground service for active SSH sessions (if user enables in settings)
+- Show notification when session disconnects in background
+
+### 11.5 Form Factor Test Matrix
+
+- Phone portrait: iPhone SE, iPhone 15, Pixel 7
+- Phone landscape: same devices rotated
+- Tablet: iPad mini, iPad Pro 11"
+- Foldable: galaxy fold open/closed (best-effort)
+
+---
+
+## 12. Theme System (Phase 4)
+
+### 12.1 Token Pipeline
+
+```
+ThemeDefinition (TS interface)
+       │
+       ▼ apply()
+   document.documentElement.style.setProperty('--bg', ...)
+       │
+       ▼
+   Tailwind reads via theme('colors.bg.DEFAULT')
+       │
+       ▼
+   Components render with correct theme
+```
+
+### 12.2 Theme Components
+
+```
+src/components/settings/themes/
+├── ThemePicker.tsx        # Grid of preview tiles (built-in + custom)
+├── ThemeEditor.tsx        # Live preview + token editors
+├── ColorPicker.tsx        # HEX / HSL color input with eyedropper
+├── TerminalPreview.tsx    # Sample terminal output with current palette
+├── ImportThemeButton.tsx
+└── ExportThemeButton.tsx
+```
+
+### 12.3 Storage
+
+- Built-in themes: `src/themes/builtin/{dark,light,high-contrast}.ts`
+- Custom themes: SQLite `themes` table, synced via Phase 9 sync engine
+- Plugin-shipped themes: registered via `plugin.register_theme(...)` API
+
+### 12.4 Theme File Format
+
+```json
+{
+  "id": "ocean-dark",
+  "name": "Ocean Dark",
+  "base": "dark",
+  "ui": { "bg": "#0a1929", "fg": "#e6f1ff", ... },
+  "terminal": {
+    "background": "#0a1929",
+    "foreground": "#e6f1ff",
+    "cursor": "#82aaff",
+    "ansi": ["#000", "#ff5874", ..., "#fff"]
+  },
+  "fontFamily": "JetBrains Mono"
+}
+```
+
+---
+
+## 13. Broadcast Mode UI (Phase 6)
+
+### 13.1 Components
+
+```
+src/components/broadcast/
+├── BroadcastToolbar.tsx     # Toggle button + target chips at top of content area
+├── BroadcastInput.tsx       # Single input field that fans out to all targets
+├── BroadcastTargetChip.tsx  # Tab indicator with remove button
+└── DangerCommandPrompt.tsx  # Confirm before broadcasting destructive commands
+```
+
+### 13.2 Behavior
+
+- Toggle in tab right-click menu: "Add to broadcast"
+- Broadcasted tabs show distinct colored border
+- Single input bar appears at top of content area when ≥1 broadcast target active
+- Input fans out via `tauri.ssh.send` to each target session id in parallel
+
+### 13.3 Safety
+
+Configurable list of dangerous patterns (default: `rm -rf`, `dd `, `mkfs`, `:(){`):
+- Match against input before broadcast
+- Show confirmation dialog with the command + list of targets
+- User must explicitly confirm
+
+---
+
+## 14. Sync UI (Phase 9)
+
+### 14.1 Components
+
+```
+src/components/sync/
+├── SyncStatusIndicator.tsx   # In status bar: last sync, pending count, error icon
+├── SyncSettings.tsx          # Backend selector, OAuth flow, credentials form
+├── SyncDiagnostic.tsx        # Logs, last error, force re-sync, force re-encrypt
+├── SelectiveSyncTree.tsx     # Hosts/snippets with checkbox to opt-in
+└── ConflictResolutionModal.tsx  # Side-by-side merge UI for conflicts
+```
+
+### 14.2 Backend Setup Flow
+
+1. Settings → Sync → Choose backend
+2. OAuth consent (GDrive/Dropbox) or credentials form (S3/WebDAV/HTTP)
+3. Test connection → success message
+4. Initial upload → progress with cancel option
+5. Sync now active
+
+### 14.3 Conflict UI
+
+Side-by-side compare with field-level diff:
+- Local version on left, remote on right
+- Field-by-field "use local" / "use remote" / "merged" buttons
+- For host config conflicts: show all changed fields
+- For group structure conflicts: tree-diff visualization
+
+---
+
+## 15. Plugin UI (Phase 12)
+
+### 15.1 Components
+
+```
+src/components/plugins/
+├── PluginManager.tsx         # List installed + enable/disable/uninstall
+├── PluginInstallDialog.tsx   # Review manifest, capabilities, signature
+├── CapabilityList.tsx        # Renders capability badges with descriptions
+├── PluginPanel.tsx           # Wraps WASM-rendered custom panel
+└── SecretAccessPrompt.tsx    # Per-access prompt when plugin requests vault read
+```
+
+### 15.2 Install Flow
+
+1. Click "Load plugin from file..."
+2. Open file picker → select `.wasm`
+3. Read manifest, display:
+   - Plugin name, author, version
+   - Signature verification status
+   - Required capabilities (with risk-level color coding)
+4. User reviews + clicks Approve or Cancel
+5. On Approve: instantiate sandbox, register hooks/panels
+6. On Cancel: discard
+
+### 15.3 Capability UX
+
+| Capability | Color | Description shown |
+|-----------|-------|-------------------|
+| log | gray | "Write to plugin log only" |
+| panel | blue | "Add a custom panel to the UI" |
+| terminal_data | yellow | "See and modify what you type and what servers send back" |
+| network | orange | "Make HTTP requests to: {allow-list}" |
+| filesystem | orange | "Read/write files in {scoped path}" |
+| secrets | red | "Read your vault credentials (asks every time)" |
+
+---
+
+## 16. Audit Log UI (Phase 13)
+
+### 16.1 Components
+
+```
+src/components/audit/
+├── AuditLogViewer.tsx        # Filterable timeline view
+├── AuditEventCard.tsx        # Single event with metadata
+├── AuditFilterBar.tsx        # Filter by host, date range, event type
+├── AuditExportButton.tsx     # Export to signed JSONL
+└── AuditRetentionSettings.tsx
+```
+
+### 16.2 Privacy UX
+
+- Warning when enabling command history capture: "Commands you type may include sensitive data"
+- Redaction patterns editor (regex with test input)
+- Bulk delete option
+
+---
+
+## 17. Team Vault UI (Phase 11)
+
+### 17.1 Components
+
+```
+src/components/team/
+├── TeamSetup.tsx             # Create new team, generate master key
+├── TeamInvitation.tsx        # Generate invite payload, scan/paste accept
+├── TeamMemberList.tsx        # List + revoke
+├── ShareHostDialog.tsx       # Pick hosts to share, set permissions
+└── SharedHostsBadge.tsx      # Visual indicator that a host is team-shared
+```
 
 ---
 

@@ -41,6 +41,13 @@ pub fn run() {
             commands::host::create_host,
             commands::host::update_host,
             commands::host::delete_host,
+            commands::host::search_hosts,
+            // Groups
+            commands::group::get_groups,
+            commands::group::create_group,
+            commands::group::update_group,
+            commands::group::delete_group,
+            commands::group::move_host_to_group,
             // Settings
             commands::settings::get_settings,
             commands::settings::set_setting,

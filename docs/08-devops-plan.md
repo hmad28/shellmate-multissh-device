@@ -1,8 +1,8 @@
 # DevOps Plan
-## ShellMate - Development Operations
+## ShellMate — Development Operations (v1.0 Production)
 
-**Version:** 1.1
-**Last Updated:** 2026-06-09
+**Version:** 2.0
+**Last Updated:** 2026-06-10
 
 ---
 
@@ -451,35 +451,50 @@ Example: `v1.2.3`
 
 ## 11. Code Signing & Distribution
 
-### 11.1 MVP Approach: Unsigned Builds
+### 11.1 v1.0 Production Requirement
 
-For MVP v1.0, ShellMate is distributed as **unsigned** binaries. Users will see OS warnings:
-- **Windows:** SmartScreen warning ("Windows protected your PC")
-- **macOS:** Gatekeeper block ("cannot be opened because the developer cannot be verified")
-- **Linux:** No warning (AppImage is fine unsigned)
+ShellMate v1.0 **must** ship signed binaries. Unsigned builds are dev-only.
 
-**Mitigation in user docs:**
-- Document the workaround clearly: macOS `xattr -d com.apple.quarantine ShellMate.app`, Windows "More info → Run anyway"
-- Provide SHA-256 checksums of all release artifacts on the GitHub Releases page
-- Sign release tags in git: `git tag -s v1.0.0`
+| Platform | Cost | Tool | Required for v1.0 |
+|----------|------|------|-------------------|
+| **macOS** | Apple Developer Program: $99/year | `codesign` + `notarytool` | ✅ |
+| **Windows** | Code Signing Cert: $200-500/year (EV: $300-600/year) | `signtool.exe` via Tauri bundler | ✅ |
+| **Linux** | Free (GPG) | Sign AppImage with GPG | ✅ |
+| **Android** | Free (self-sign) for direct APK; $25 one-time for Play Store | `apksigner` / Play Console | ✅ |
+| **iOS** | Apple Developer Program (same $99/yr) | Xcode signing + App Store Connect | ✅ |
 
-### 11.2 Post-MVP: Signed Builds
+### 11.2 Pre-1.0 Dev Builds
 
-When budget allows:
+Pre-release dev builds are unsigned. Users see OS warnings. Dev docs include workarounds:
+- macOS: `xattr -d com.apple.quarantine ShellMate.app`
+- Windows: SmartScreen "More info → Run anyway"
+- Linux: AppImage works as-is
+- Android: enable "Install unknown apps"
 
-| Platform | Cost | Tool |
-|----------|------|------|
-| **macOS** | Apple Developer Program: $99/year | `codesign` + `notarytool` for notarization |
-| **Windows** | Code Signing Cert: $200-500/year (EV cert: $300-600/year, no SmartScreen warm-up) | `signtool.exe` via Tauri bundler |
-| **Linux** | Free (GPG) | Sign AppImage with GPG, publish public key |
+### 11.3 Tauri v2 Updater (Phase 14)
 
-### 11.3 Tauri v2 Updater (Post-MVP)
-
-When auto-updater is added:
+Auto-updater is part of v1.0:
 - Generate Tauri updater key pair (`tauri signer generate`)
 - Public key embedded in app, private key in CI secret only
 - Updates served from GitHub Releases or self-hosted endpoint
-- Updates are signed even if app binary is not (defense in depth)
+- Update channel: stable + beta (opt-in)
+- Updates are signed even if app binary signing somehow fails (defense in depth)
+
+### 11.4 Mobile Distribution
+
+| Channel | Strategy |
+|---------|----------|
+| Android Play Store | Signed AAB upload, staged rollout (1% → 10% → 100%) |
+| Android direct APK | GPG-signed download from GitHub Releases |
+| iOS App Store | TestFlight beta then App Store review |
+| F-Droid (optional) | Reproducible build, separate package |
+
+### 11.5 Release Checksums
+
+Every release includes:
+- SHA-256 checksums for all artifacts
+- GPG-signed checksum file
+- Tauri updater manifest (signed)
 
 ---
 
@@ -557,7 +572,7 @@ it('host form has no a11y violations', async () => {
 | Frontend runtime | Chrome DevTools (WebView2 supports it on Windows) |
 | End-to-end startup | Custom wall-clock measurement in `main.rs` |
 
-### 13.4 Benchmark Suite (Post-MVP)
+### 13.4 Benchmark Suite (Phase 14)
 
 Pre-release benchmark script that reports:
 - Cold start time (median of 5 runs)
@@ -600,6 +615,148 @@ Results committed to `benchmarks/` for regression tracking.
 - Generated code (Tauri bindings)
 - Third-party library internals
 - Trivial getters/setters
+
+---
+
+## 15. Mobile Build & Distribution (Phase 10)
+
+### 15.1 Tauri v2 Mobile Targets
+
+```bash
+# Initialize once
+npm run tauri android init
+npm run tauri ios init
+
+# Dev runs
+npm run tauri android dev
+npm run tauri ios dev
+
+# Production builds
+npm run tauri android build --release
+npm run tauri ios build --release
+```
+
+### 15.2 Android
+
+| Aspect | Detail |
+|--------|--------|
+| Min SDK | 29 (Android 10) |
+| Target SDK | latest at v1.0 release |
+| Architectures | arm64-v8a (primary), armeabi-v7a, x86_64 |
+| Build outputs | `.apk` (direct distribution), `.aab` (Play Store) |
+| Signing | Local keystore for direct APK; Play App Signing managed for Play Store |
+| Permissions declared | `INTERNET`, `USE_BIOMETRIC`, `POST_NOTIFICATIONS`, `WAKE_LOCK` (for keepalive) |
+
+### 15.3 iOS
+
+| Aspect | Detail |
+|--------|--------|
+| Min iOS | 15 |
+| Architectures | arm64 |
+| Distribution | TestFlight (beta), App Store (stable) |
+| Signing | Apple Developer Program ($99/yr) — Distribution + Push (for biometric local) certificates |
+| Capabilities | Background Modes (Audio: keep alive minimal time), Keychain Sharing, Face ID |
+
+### 15.4 Mobile CI
+
+GitHub Actions matrix needs macOS runners for iOS builds. Android builds can run on Linux. Cache:
+- Android SDK + NDK
+- iOS Pods
+- Rust target dirs (`target/aarch64-linux-android`, `target/aarch64-apple-ios`, etc.)
+
+### 15.5 Mobile Specific Tests
+
+- Touch interaction tests (Playwright + mobile viewport simulation OR real device)
+- Battery profiling (Android Profiler, Xcode Instruments)
+- Background/foreground lifecycle (sessions persist briefly, auto-reconnect on resume)
+- Biometric flow (manual smoke test per platform)
+
+---
+
+## 16. Plugin Distribution (Phase 12)
+
+### 16.1 v1.0: Local Plugin Loading
+
+For v1.0, plugins are loaded from local `.wasm` files. No public registry.
+
+User workflow:
+1. Download plugin file from author (GitHub Release, etc.)
+2. App > Settings > Plugins > "Load from file..."
+3. Review manifest (capabilities, signature, author)
+4. Confirm install
+5. Plugin runs sandboxed
+
+### 16.2 Plugin Author Workflow
+
+```bash
+# Author writes plugin in Rust + targets wasm32-wasi
+cargo build --target wasm32-wasi --release
+
+# Sign manifest
+shellmate-plugin-sign manifest.toml --key author.key
+
+# Distribute the .wasm + manifest.toml + signature
+```
+
+### 16.3 Verification Pipeline
+
+On install:
+1. Verify manifest signature (Ed25519)
+2. Display plugin metadata + capabilities to user
+3. User clicks Approve → wrap with Wasmtime, instantiate
+4. Plugin sandbox active
+
+### 16.4 Public Registry (post-1.0)
+
+Out of scope for v1.0. Future considerations:
+- Centralized index of audited plugins
+- Author identity verification
+- Automated capability audit
+- Update channel per plugin
+
+---
+
+## 17. Sync Backend Setup (Phase 9)
+
+### 17.1 Per-Backend Adapter Requirements
+
+| Backend | Auth | Setup Steps |
+|---------|------|-------------|
+| **iCloud** | macOS/iOS native | User signs in to iCloud at OS level; app uses CloudKit container |
+| **GDrive** | OAuth 2.0 | App registered with Google API Console, user OAuth flow on first sync |
+| **Dropbox** | OAuth 2.0 | App registered with Dropbox dev console |
+| **S3 / MinIO** | Access key + secret | User provides bucket + credentials (encrypted at rest in vault) |
+| **WebDAV** | Basic auth or token | URL + credentials |
+| **Self-hosted HTTP** | API token | Custom endpoint + token |
+
+### 17.2 Conflict Tests
+
+Pre-release smoke test for each backend:
+- Push from device A → pull on device B → matches
+- Concurrent edit on A and B → conflict UI shown
+- Revoke device → access cut off
+- Backend outage → graceful retry with backoff
+
+---
+
+## 18. Security Audit Pipeline
+
+### 18.1 Pre-1.0 Audit Checklist
+
+- [ ] `cargo audit` clean (no known vulnerable dependencies)
+- [ ] `npm audit` clean
+- [ ] All secrets handling reviewed by 2nd pair of eyes
+- [ ] Penetration test: SSH credential extraction, vault bypass, plugin sandbox escape
+- [ ] Sync E2E test: verify cloud provider cannot read payloads (manual with provider tools)
+- [ ] Biometric flow tested per platform
+- [ ] CSP headers verified
+- [ ] No analytics / telemetry calls (network monitor verification)
+
+### 18.2 Continuous
+
+- Dependabot enabled for npm + cargo
+- Weekly `cargo audit` in CI
+- Plugin SDK changes go through security review
 
 ---
 

@@ -1,8 +1,8 @@
 # Backend Plan
-## ShellMate - Rust + Tauri Backend
+## ShellMate — Rust + Tauri Backend (v1.0 Production)
 
-**Version:** 1.1
-**Last Updated:** 2026-06-09
+**Version:** 2.0
+**Last Updated:** 2026-06-10
 
 ---
 
@@ -780,7 +780,7 @@ SFTP runs as a **separate channel on the same SSH connection of its parent termi
 - If user opens SFTP without an active terminal, a new dedicated SSH connection is created
 - This is the **one place** where multi-channel is used in MVP — and it's narrow and well-tested
 
-### 9.7 Post-MVP Evaluation
+### 9.7 Post-1.0 Evaluation
 
 Conditions to revisit and add connection multiplexing:
 - User feedback: "I open 5 tabs to same server, want it faster"
@@ -788,6 +788,172 @@ Conditions to revisit and add connection multiplexing:
 - Memory pressure on systems with many tabs
 
 If revisited, implement as **opt-in setting** ("Reuse SSH connection for tabs to same host"), not default — to preserve isolation guarantees for users who depend on them.
+
+---
+
+## 10. New Backend Modules (v1.0)
+
+The following modules are added in later phases. Listed here for backend architecture completeness.
+
+### 10.1 `src-tauri/src/mosh/` (Phase 6)
+
+UDP-based State Synchronization Protocol fallback for unreliable networks.
+
+```
+mosh/
+├── mod.rs           # Module entry, ConnectionFactory
+├── handshake.rs     # Spawn mosh-server via SSH, exchange session key
+├── transport.rs     # UDP send/receive, sequence numbers, retransmits
+├── state_sync.rs    # SSP terminal state sync (predictive echo)
+└── session.rs       # Mosh session lifecycle (mirrors ssh::session API)
+```
+
+**Integration:** `MoshSession` implements same `SessionTrait` as `SshSession` so frontend doesn't care about transport. Tab metadata indicates protocol.
+
+**Mosh-server bootstrap:** initial connection over SSH to spawn mosh-server, parse `MOSH CONNECT <port> <key>` line, then switch to UDP transport.
+
+### 10.2 `src-tauri/src/sync/` (Phase 9)
+
+Multi-device sync engine with pluggable backends.
+
+```
+sync/
+├── mod.rs           # SyncEngine, public API
+├── manifest.rs      # Encrypted manifest format, version vectors
+├── encrypt.rs       # Per-payload encryption (AES-GCM with sync key)
+├── conflict.rs      # Conflict detection + resolution
+├── change_log.rs    # Local change tracker (entity → version)
+└── backend/
+    ├── mod.rs       # SyncBackend trait
+    ├── icloud.rs    # iCloud KVS / CloudKit
+    ├── gdrive.rs    # Google Drive API v3
+    ├── dropbox.rs   # Dropbox API v2
+    ├── s3.rs        # S3-compatible (AWS / MinIO / Backblaze B2)
+    ├── webdav.rs    # WebDAV (Nextcloud / generic)
+    └── http.rs      # Self-hosted HTTP with bearer token
+```
+
+**Tauri commands:**
+- `sync_status` — last sync time, queued changes, error state
+- `sync_configure` — set backend + credentials
+- `sync_now` — manual trigger
+- `sync_pause` / `sync_resume`
+- `sync_resolve_conflict` — accept local / remote / merged
+
+### 10.3 `src-tauri/src/plugin/` (Phase 12)
+
+Wasmtime-based plugin runtime.
+
+```
+plugin/
+├── mod.rs           # PluginManager, public API
+├── manifest.rs      # Manifest parsing + signature verification
+├── runtime.rs       # Wasmtime Store, Engine, Linker setup
+├── host_api.rs      # Host functions exposed to plugins
+├── permissions.rs   # Capability gating
+└── registry.rs      # Installed plugin registry (local SQLite table)
+```
+
+**Tauri commands:**
+- `plugin_list` — installed plugins + state
+- `plugin_install` — load `.wasm` + manifest, verify signature, prompt user
+- `plugin_uninstall`
+- `plugin_enable` / `plugin_disable`
+- `plugin_grant_capability` / `plugin_revoke_capability`
+
+**Host API surface (capability-gated):**
+- `log(level, message)` — always allowed
+- `register_panel(panel_def)` — needs `panel`
+- `terminal_data_in(session_id, callback)` — needs `terminal_data`
+- `terminal_data_out(session_id, callback)` — needs `terminal_data`
+- `pre_connect(callback)` / `post_connect(callback)` — hooks
+- `net_request(url)` — needs `network` (allow-listed)
+- `fs_read(path)` / `fs_write(path)` — needs `filesystem` (scoped)
+- `secret_get(host_id)` — needs `secrets` + per-access user prompt
+
+### 10.4 `src-tauri/src/audit/` (Phase 13)
+
+Encrypted hash-chained audit log.
+
+```
+audit/
+├── mod.rs           # AuditLog, public API
+├── event.rs         # Event types + serialization
+├── chain.rs         # Hash chain (prev_hash field)
+├── redaction.rs     # Pattern-based secret redaction
+└── export.rs        # Signed JSONL export
+```
+
+**Tauri commands:**
+- `audit_query` — filter/search events
+- `audit_export` — write signed JSONL to file
+- `audit_purge` — apply retention policy (delete events older than threshold)
+- `audit_set_host_enabled` — opt-in per host
+
+### 10.5 `src-tauri/src/sftp/` (Phase 5)
+
+Already planned in original spec; full implementation in Phase 5.
+
+### 10.6 `src-tauri/src/team/` (Phase 11)
+
+Team vault: shared host configs encrypted with team key.
+
+```
+team/
+├── mod.rs           # TeamManager, public API
+├── keypair.rs       # X25519 keypair management (per-user)
+├── team_key.rs      # Team master key generation, wrap/unwrap per member
+├── share.rs         # Per-host share envelope
+└── rotation.rs      # Team key rotation on member revoke
+```
+
+**Tauri commands:**
+- `team_create` — initialize team, generate master key
+- `team_invite` — generate invite payload (encrypts team master key with invitee's pubkey)
+- `team_accept_invite` — decrypt + store team master key
+- `team_revoke_member` — rotate team key, re-encrypt all shared hosts
+- `team_share_host` — wrap host config with team key
+- `team_list_shared`
+
+### 10.7 `src-tauri/src/biometric/` (Phase 8)
+
+Per-OS biometric wrapping of vault key. Implementation routed via `cfg`.
+
+```
+biometric/
+├── mod.rs           # BiometricVault trait
+├── macos.rs         # LocalAuthentication framework
+├── ios.rs           # LocalAuthentication framework
+├── windows.rs       # Windows Hello via WinRT
+├── android.rs       # BiometricPrompt JNI
+└── stub.rs          # Linux fallback (returns Unsupported)
+```
+
+### 10.8 Backend Module Map (Complete)
+
+```
+src-tauri/src/
+├── main.rs
+├── lib.rs
+├── state.rs
+├── errors.rs
+│
+├── commands/        # Tauri command handlers (frontend boundary)
+├── crypto/          # Argon2id, AES-GCM, SecureBuffer
+├── db/              # SQLite + SQLCipher (Phase 7)
+├── vault/           # Master password + vault state
+├── ssh/             # russh sessions (1 conn / tab)
+├── mosh/            # Mosh fallback (Phase 6)
+├── sftp/            # SFTP client (Phase 5)
+├── port_forward/    # SSH tunnel rules (Phase 5)
+├── sync/            # Multi-device sync (Phase 9)
+├── plugin/          # Wasmtime sandbox (Phase 12)
+├── audit/           # Audit log (Phase 13)
+├── team/            # Team vault (Phase 11)
+├── biometric/       # Per-OS biometric (Phase 8)
+├── theme/           # Custom theme storage (Phase 4)
+└── platform/        # Platform-specific glue (mobile / desktop)
+```
 
 ---
 

@@ -1,8 +1,8 @@
 # Project Structure Plan
-## ShellMate - SSH Client Desktop App
+## ShellMate — SSH Client (v1.0 Production)
 
-**Version:** 1.1
-**Last Updated:** 2026-06-09
+**Version:** 2.0
+**Last Updated:** 2026-06-10
 
 ---
 

@@ -1,8 +1,8 @@
 # Security Plan
-## ShellMate - Security Architecture
+## ShellMate — Security Architecture (v1.0 Production)
 
-**Version:** 1.1
-**Last Updated:** 2026-06-09
+**Version:** 2.0
+**Last Updated:** 2026-06-10
 
 ---
 
@@ -234,7 +234,7 @@ Following **NIST SP 800-63B** (2017+) recommendations: **length over complexity*
 - During vault setup, user must check a confirmation: "I understand that if I forget my master password, my data cannot be recovered."
 - Suggest user write it down or store in a separate password manager
 - Optional: offer to print/display a "vault info" sheet (vault location, hint they wrote — never the password itself)
-- Strongly recommend exporting an **encrypted backup** (post-MVP feature) periodically
+- Strongly recommend exporting an **encrypted backup** (Phase 14) periodically
 
 **On vault setup screen:**
 ```
@@ -506,80 +506,248 @@ pub fn sanitize_log(message: &str) -> String {
 
 ---
 
-## 11. Encryption Strategy Decision
+## 11. Encryption Strategy
 
-### 11.1 Decision: Per-Field Encryption (MVP)
+### 11.1 Decision: Defense in Depth (Both Layers)
 
-For MVP, ShellMate uses **per-field encryption** of credentials only — passwords, private keys, and passphrases stored in the `credentials` table are encrypted with AES-256-GCM. Other tables (`hosts`, `groups`, `snippets`, `port_forwards`, `settings`) are stored as plaintext SQLite rows.
+ShellMate v1.0 uses **two layers of at-rest encryption**:
 
-### 11.2 What This Protects
-- ✅ Passwords and private keys at rest
-- ✅ Memory dump while vault is locked
-- ✅ Stolen SQLite file cannot be used to authenticate to SSH servers
-- ✅ Granular re-encryption (rotate vault key without re-encrypting whole DB)
+1. **Per-credential AES-256-GCM** — passwords, private keys, passphrases stored in `credentials` table are encrypted with the vault key (Argon2id-derived). This was implemented in Phase 2.
 
-### 11.3 What This Does NOT Protect
-- ❌ Hostnames, usernames, host labels, group names, snippet contents, notes
-- ❌ Metadata leakage if attacker accesses SQLite file (they can see your server inventory)
-- ❌ Snippet contents may include sensitive paths or commands
+2. **SQLCipher full-DB encryption** — the entire SQLite database file is encrypted with a separate DB key (also derived from the master password via HKDF, distinct from the vault key). All metadata — hostnames, usernames, group names, snippet contents, settings — protected at rest. Implemented in Phase 7.
 
-For MVP threat model (single-user device, file-system-level protection from OS), this trade-off is acceptable. Users with stricter requirements should rely on full-disk encryption (BitLocker, FileVault, LUKS).
+Both layers are active simultaneously in v1.0.
 
-### 11.4 Alternative Considered: SQLCipher
+### 11.2 Why Both?
 
-**SQLCipher** would encrypt the entire SQLite database file, protecting all metadata. It is a transparent layer over SQLite with strong encryption (AES-256, PBKDF2 by default).
+| Concern | Per-credential AES-GCM | SQLCipher full-DB |
+|---------|------------------------|-------------------|
+| Credential theft from stolen DB file | ✅ blocks | ✅ blocks |
+| Metadata leakage from stolen DB file | ❌ visible | ✅ blocks |
+| Memory dump while vault locked | ✅ blocks | ✅ blocks |
+| Memory dump while vault unlocked | ❌ key in mem | ❌ key in mem |
+| Granular re-encryption (rotate vault) | ✅ per-cred re-encrypt | ⚠️ requires DB rebuild |
+| Defense if one layer is compromised | — | acts as backstop |
 
-| Aspect | Per-Field (MVP) | SQLCipher (Future) |
-|--------|-----------------|--------------------|
-| Metadata protection | ❌ | ✅ |
-| Performance overhead | None | ~5-15% on read/write |
-| Build complexity | Low (pure Rust) | Medium (C dep, needs `rusqlite` SQLCipher feature) |
-| Cross-platform | Easy | Requires platform-specific build flags |
-| Key management | Per-vault (Argon2id-derived) | Same key, applied at DB open |
-| Migration cost from MVP | — | Need migration script |
+**Rationale:** Per-credential layer survives even if SQLCipher key is leaked or weakly chosen. SQLCipher protects metadata that per-credential layer doesn't reach. Belt-and-suspenders.
 
-### 11.5 Post-MVP Migration Path
+### 11.3 Implementation (Phase 7)
 
-Re-evaluate SQLCipher when:
-- User requests metadata privacy (stronger threat model)
-- Multi-device sync is added (encrypted backups in untrusted cloud)
-- Performance budget allows ~10% read/write overhead
+- Migration tool: detects existing plaintext SQLite (Phase 1-6 builds), prompts user, atomically rebuilds DB with SQLCipher
+- DB key derivation: separate output from same master password via HKDF — not the same byte-string as vault key
+- `PRAGMA key` set on connection open
+- Per-credential encryption stays in place — no changes to `credentials` table format
 
-**Migration approach:**
-1. Add SQLCipher as opt-in setting ("Full database encryption")
-2. On enable: derive new DB key from master password (separate from credential vault key, or shared via HKDF)
-3. Re-create database with `PRAGMA key`, copy data, swap files atomically
-4. Existing per-field encryption stays — defense in depth
+### 11.4 Performance
 
-### 11.6 Implementation Notes (MVP)
+Target: < 15% read/write regression vs plaintext SQLite (CI gate). SQLCipher uses AES-256 in CBC mode with HMAC-SHA512 by default. Acceptable for typical query workload (host list, snippet search, audit query).
 
-```rust
-// credentials table: encrypted blob + nonce
-struct EncryptedCredential {
-    id: String,
-    cred_type: CredentialType,
-    encrypted_data: Vec<u8>,  // AES-256-GCM ciphertext + auth tag
-    nonce: [u8; 12],          // GCM nonce (random per encryption)
-    created_at: String,
-    updated_at: String,
-}
+### 11.5 Key Hierarchy
 
-// Decrypt only when needed (e.g., during SSH connect), zeroize after
-fn use_credential(id: &str, vault_key: &[u8; 32]) -> Result<()> {
-    let row = db::get_credential(id)?;
-    let plaintext = decrypt(&row.encrypted_data, &row.nonce, vault_key)?;
-    let secret = SecureBuffer::new(plaintext);
-    // ... use secret ...
-    // SecureBuffer::Drop zeroizes
-    Ok(())
-}
+```
+Master Password
+       │
+       ▼ Argon2id (per Phase 2 §2.2)
+Master Key (256-bit derived)
+       │
+       ├──────────────────────────┐
+       ▼                          ▼
+   HKDF-SHA256              HKDF-SHA256
+   info: "vault.v1"         info: "db.v1"
+       │                          │
+       ▼                          ▼
+   Vault Key                 DB Key
+   (encrypts                 (SQLCipher
+    credentials)              PRAGMA key)
 ```
 
-**Key rules:**
-- Vault key lives only in memory (never persisted)
-- Generate fresh nonce for every encryption (12 random bytes)
-- Use authenticated encryption (GCM) — never raw AES-CBC or AES-CTR
-- Rotate vault key when master password changes (re-encrypt all credentials)
+Domain separation via HKDF `info` parameter prevents either key from being reused for the other context.
+
+---
+
+## 12. Biometric Unlock Security (Phase 8)
+
+### 12.1 Threat Model
+
+Biometric unlock provides **convenience**, not extra security beyond the master password. The master password is still the root of trust.
+
+### 12.2 Architecture
+
+```
+First-time enable
+─────────────────
+   Master Password
+        │
+        ▼ Argon2id
+   Master Key
+        │
+        ▼ wrap with biometric-protected key
+   Wrapped Master Key  ──> stored in OS secure enclave
+                          (TPM / Secure Enclave / Keystore)
+
+Subsequent unlock
+─────────────────
+   User biometric prompt
+        │
+        ▼ OS verifies, releases biometric-protected key
+   Biometric Key
+        │
+        ▼ unwrap
+   Master Key  ──> derive vault & DB keys
+```
+
+### 12.3 Per-OS Implementation
+
+| Platform | Backing Store | API |
+|----------|---------------|-----|
+| macOS | Keychain + Secure Enclave | `LocalAuthentication` framework |
+| iOS | Keychain + Secure Enclave | `LocalAuthentication` framework |
+| Windows | Windows Hello + TPM | `Windows.Security.Credentials.UI` |
+| Android | Android Keystore | `BiometricPrompt` |
+| Linux | Not supported (fallback to master password) | — |
+
+### 12.4 Security Rules
+
+- Biometric unlock is **per-device only** (not synced)
+- Failed biometric attempts do NOT increment master password lockout counter
+- After 5 consecutive biometric failures, fall back to master password
+- Disabling biometric removes the wrapped master key
+- Master password change invalidates wrapped master key — biometric must be re-enrolled
+
+---
+
+## 13. Sync Security (Phase 9)
+
+### 13.1 Threat Model
+
+Cloud provider (iCloud, GDrive, Dropbox, S3, WebDAV server) is treated as **untrusted**. Sync payload must be unreadable to the provider.
+
+### 13.2 Encryption
+
+```
+Local entity (host config / snippet / setting)
+       │
+       ▼ serialize to canonical JSON
+       │
+       ▼ encrypt with sync key (HKDF info: "sync.v1")
+       │
+       ▼ AES-256-GCM with random nonce
+   Encrypted Payload
+       │
+       ▼ upload via backend adapter
+   Cloud storage object (opaque ID, no metadata in path)
+```
+
+### 13.3 No Metadata Leakage
+
+- Object names use random UUIDs, not host labels
+- Manifest itself is encrypted
+- HTTP headers (where controllable) sanitized
+- Backend adapter must not log payload contents
+
+### 13.4 Verification
+
+Manual test required for v1.0 GA: configure each backend, push data, verify with provider's CLI/web UI that no plaintext is visible. Document the test in security review notes.
+
+### 13.5 Conflict Resolution Without Decryption Leak
+
+Conflicts resolved client-side after decryption. Cloud provider only sees opaque payloads with version vectors (which are themselves encrypted in the manifest).
+
+---
+
+## 14. Team Vault Security (Phase 11)
+
+### 14.1 Key Hierarchy
+
+```
+Team Master Key (random, 256-bit, generated on team creation)
+       │
+       ├─ wrapped with each member's public key (X25519)
+       │  └─ stored in shared sync object
+       │
+       └─ used to encrypt shared host configs (AES-256-GCM)
+```
+
+### 14.2 Member Lifecycle
+
+- **Add member**: encrypt team master key with their public key, append to wrapped-keys list
+- **Revoke member**: rotate team master key, re-encrypt all shared hosts, distribute new wrapped keys
+- **Revocation is reactive** — already-extracted data cannot be unsent. UI must warn explicitly.
+
+### 14.3 Trust Model
+
+- Each member has personal vault (their own master password)
+- Personal vault holds X25519 keypair for team participation
+- Team master key never leaves encrypted form except briefly in member RAM
+- No "team admin" with God-mode key — quorum or single-creator model
+
+### 14.4 Conflict on Shared Hosts
+
+Two team members editing same host: last-write-wins by default with timestamp; manual merge UI for explicit conflicts. Audit log captures who-changed-what.
+
+---
+
+## 15. Plugin Security (Phase 12)
+
+### 15.1 Sandbox
+
+Plugins run in **Wasmtime** WASM sandbox:
+- No native code execution
+- No direct OS syscalls
+- No filesystem or network access by default
+
+### 15.2 Capability-Based Permissions
+
+Plugins declare capabilities in signed manifest. User reviews on install. Capabilities revocable.
+
+| Capability | Risk | UX |
+|-----------|------|-----|
+| `log` | None | Auto-granted |
+| `terminal_data` | Could exfiltrate session content | Per-install consent, can revoke |
+| `panel` | UI surface only, no data access | Per-install consent |
+| `network` | Allow-listed hosts only, outbound HTTP | Per-install with explicit host list |
+| `filesystem` | Scoped to `~/Documents/Plugins/<id>/` | Per-install consent |
+| `secrets` | Read vault credentials | Per-install + per-access prompt UI |
+
+### 15.3 Plugin Manifest Signing
+
+- Manifests must be Ed25519-signed by plugin author
+- Public key shipped in manifest, hash displayed to user on install
+- Update path: signature must match same key, otherwise treated as new install
+
+### 15.4 Crash Isolation
+
+Plugin panic / trap does NOT crash host app. Errors logged, plugin disabled until user re-enables.
+
+---
+
+## 16. Audit Log Security (Phase 13)
+
+### 16.1 Storage
+
+Audit log stored in dedicated SQLite table (`audit_events`). Each row encrypted with vault key (same as credentials).
+
+### 16.2 Hash Chain
+
+Each event includes hash of previous event:
+```
+event_n.prev_hash = SHA256(event_{n-1} canonical bytes)
+```
+Tampering with any past event invalidates all subsequent hashes — detected on export verification.
+
+### 16.3 Privacy
+
+- Opt-in **per host** (default OFF)
+- Command history opt-in separately (default OFF — high sensitivity)
+- Redaction patterns applied before storage (regex, configurable, e.g., `password=\S+`)
+- Retention configurable (default 90 days, max "forever")
+
+### 16.4 Export
+
+`Export Audit Log` produces signed JSONL:
+- Each line is a canonicalized event
+- Last line is signature of file hash
+- Compliance evidence-grade output
 
 ---
 

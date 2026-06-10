@@ -1,8 +1,8 @@
 # ERD Plan - Entity Relationship Diagram
-## ShellMate - Database Schema
+## ShellMate — Database Schema (v1.0 Production)
 
-**Version:** 1.1
-**Last Updated:** 2026-06-09
+**Version:** 2.0
+**Last Updated:** 2026-06-10
 
 ---
 
@@ -420,6 +420,199 @@ ORDER BY title;
 - SQLite uses file-level locking
 - Single connection sufficient for most cases
 - Use WAL mode for concurrent reads
+
+---
+
+## Appendix A: v1.0 Schema Additions
+
+The following tables are added in later phases. Migrations registered incrementally in `db/schema.rs`.
+
+### A.1 `themes` (Phase 4)
+
+User-defined custom themes.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | TEXT | PRIMARY KEY | UUID v4 |
+| `name` | TEXT | NOT NULL | Display name |
+| `base` | TEXT | NOT NULL CHECK (base IN ('dark', 'light')) | Base style |
+| `definition` | TEXT | NOT NULL | JSON ThemeDefinition (see 03-frontend-plan §12.4) |
+| `is_builtin` | INTEGER | NOT NULL DEFAULT 0 | 1 for shipped themes |
+| `created_at` | TEXT | NOT NULL | |
+| `updated_at` | TEXT | NOT NULL | |
+
+### A.2 `known_hosts` (Phase 6)
+
+SSH host key fingerprints for TOFU verification.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | TEXT | PRIMARY KEY | UUID v4 |
+| `hostname` | TEXT | NOT NULL | Server hostname/IP |
+| `port` | INTEGER | NOT NULL | SSH port |
+| `key_type` | TEXT | NOT NULL | e.g., `ssh-ed25519`, `ssh-rsa` |
+| `fingerprint` | TEXT | NOT NULL | SHA256 fingerprint |
+| `public_key_blob` | BLOB | NOT NULL | Raw public key for comparison |
+| `first_seen` | TEXT | NOT NULL | |
+| `last_seen` | TEXT | NOT NULL | |
+
+Index: `(hostname, port)` UNIQUE.
+
+### A.3 `sync_state` (Phase 9)
+
+Per-entity sync metadata.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `entity_type` | TEXT | NOT NULL | `host`, `group`, `snippet`, `setting`, `theme` |
+| `entity_id` | TEXT | NOT NULL | FK to source entity |
+| `version_vector` | TEXT | NOT NULL | JSON map device_id → counter |
+| `last_synced_at` | TEXT | NULLABLE | NULL if never synced |
+| `pending_change` | INTEGER | NOT NULL DEFAULT 0 | 1 if local change waiting upload |
+| `remote_object_id` | TEXT | NULLABLE | Opaque cloud object ID |
+
+Primary key: `(entity_type, entity_id)`.
+
+### A.4 `sync_config` (Phase 9)
+
+Sync backend configuration (encrypted via vault).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | TEXT | PRIMARY KEY | Always `'default'` for v1.0 (single backend per device) |
+| `backend_type` | TEXT | NOT NULL | `icloud`, `gdrive`, `dropbox`, `s3`, `webdav`, `http` |
+| `encrypted_credentials` | BLOB | NOT NULL | Vault-encrypted JSON config |
+| `nonce` | BLOB | NOT NULL | |
+| `enabled` | INTEGER | NOT NULL DEFAULT 1 | Pause flag |
+| `last_sync_at` | TEXT | NULLABLE | |
+| `created_at` | TEXT | NOT NULL | |
+| `updated_at` | TEXT | NOT NULL | |
+
+### A.5 `audit_events` (Phase 13)
+
+Hash-chained audit log.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | TEXT | PRIMARY KEY | UUID v4 |
+| `host_id` | TEXT | NULLABLE FK → hosts(id) | NULL for non-host events |
+| `event_type` | TEXT | NOT NULL | `session_start`, `session_end`, `sftp_transfer`, `command_sent`, `vault_lock`, `vault_unlock`, etc. |
+| `encrypted_payload` | BLOB | NOT NULL | Vault-encrypted event details |
+| `nonce` | BLOB | NOT NULL | |
+| `prev_hash` | TEXT | NOT NULL | SHA256 of previous event row's canonical bytes |
+| `created_at` | TEXT | NOT NULL | |
+
+Index: `(host_id, created_at)`, `(event_type)`.
+
+### A.6 `audit_settings` (Phase 13)
+
+Per-host audit opt-in.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `host_id` | TEXT | PRIMARY KEY FK → hosts(id) | |
+| `audit_enabled` | INTEGER | NOT NULL DEFAULT 0 | Master toggle |
+| `command_history_enabled` | INTEGER | NOT NULL DEFAULT 0 | Higher sensitivity, separate opt-in |
+| `redaction_patterns` | TEXT | NULLABLE | JSON array of regex strings |
+| `retention_days` | INTEGER | NOT NULL DEFAULT 90 | 0 = forever |
+
+### A.7 `team` + `team_members` + `team_shares` (Phase 11)
+
+Team vault.
+
+```sql
+CREATE TABLE team (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  team_master_key_wrapped BLOB NOT NULL,  -- wrapped with current user's key
+  team_master_key_nonce BLOB NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE team_members (
+  id TEXT PRIMARY KEY,
+  team_id TEXT NOT NULL REFERENCES team(id) ON DELETE CASCADE,
+  member_pubkey TEXT NOT NULL,            -- X25519 public key (base64)
+  member_label TEXT NOT NULL,
+  wrapped_team_key BLOB NOT NULL,         -- team master key wrapped with member_pubkey
+  added_at TEXT NOT NULL,
+  revoked_at TEXT NULLABLE
+);
+
+CREATE TABLE team_shares (
+  id TEXT PRIMARY KEY,
+  team_id TEXT NOT NULL REFERENCES team(id) ON DELETE CASCADE,
+  host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+  permission TEXT NOT NULL CHECK (permission IN ('read', 'edit')),
+  shared_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_team_members_team ON team_members(team_id);
+CREATE INDEX idx_team_shares_team ON team_shares(team_id);
+CREATE INDEX idx_team_shares_host ON team_shares(host_id);
+```
+
+### A.8 `plugins` + `plugin_capabilities` (Phase 12)
+
+Plugin registry.
+
+```sql
+CREATE TABLE plugins (
+  id TEXT PRIMARY KEY,                    -- plugin id from manifest (e.g., com.example.theme)
+  name TEXT NOT NULL,
+  version TEXT NOT NULL,
+  author TEXT NOT NULL,
+  api_version TEXT NOT NULL,
+  manifest_path TEXT NOT NULL,            -- on-disk path to plugin dir
+  signature_pubkey TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  installed_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE plugin_capabilities (
+  plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
+  capability TEXT NOT NULL,               -- e.g., 'network', 'filesystem', 'secrets'
+  granted INTEGER NOT NULL DEFAULT 0,
+  config TEXT,                            -- JSON: e.g., allow-listed network hosts
+  PRIMARY KEY (plugin_id, capability)
+);
+```
+
+### A.9 `biometric_state` (Phase 8)
+
+Per-device biometric enablement (NOT synced — device-specific).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | TEXT | PRIMARY KEY | Always `'default'` |
+| `enabled` | INTEGER | NOT NULL DEFAULT 0 | |
+| `wrapped_master_key` | BLOB | NULLABLE | Master key wrapped by OS biometric-protected key |
+| `os_keychain_handle` | TEXT | NULLABLE | OS-specific reference (Keychain item ID etc.) |
+| `enrolled_at` | TEXT | NULLABLE | |
+
+---
+
+## Appendix B: Update to ERD Diagram (v1.0)
+
+The complete v1.0 ERD adds the following relationships beyond Phase 1-2:
+
+```
+hosts ──┬── audit_events (1:n)
+        ├── audit_settings (1:1)
+        ├── team_shares (n:m through team)
+        └── port_forwards (1:n)
+
+team ──┬── team_members (1:n)
+       └── team_shares (1:n)
+
+plugins ── plugin_capabilities (1:n)
+
+(sync_state and sync_config are standalone — not foreign-key linked, they reference
+ entities by composite (entity_type, entity_id))
+
+themes, known_hosts, biometric_state — standalone tables.
+```
 
 ---
 

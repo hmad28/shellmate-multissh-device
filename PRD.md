@@ -1,10 +1,10 @@
 # Product Requirements Document (PRD)
-## SSH Client Desktop App — Self-Hosted, Local-First
+## SSH Client — Self-Hosted, Local-First, Multi-Device
 **Codename:** ShellMate
-**Version:** 1.3
+**Version:** 2.0
 **Author:** Matt
 **Last Updated:** 2026-06-10
-**Status:** In development
+**Status:** In development (Phase 1-2 complete, scope expanded to full v1.0 production)
 
 ---
 
@@ -12,68 +12,153 @@
 
 ### 1.1 Latar Belakang
 
-Saat ini banyak SSH client yang populer (seperti Termius) mengunci fitur-fitur esensial seperti host management, snippets, dan sync di balik paywall berlangganan. Alternatif gratis seperti PuTTY atau native terminal tidak menyediakan UX yang modern dan produktif.
+Saat ini banyak SSH client yang populer (seperti Termius) mengunci fitur-fitur esensial seperti host management, snippets, dan sync di balik paywall berlangganan. Alternatif gratis seperti PuTTY atau native terminal tidak menyediakan UX yang modern dan produktif, dan tidak ada satu pun yang menggabungkan **multi-device + local-first + extensibility** secara komprehensif.
 
-ShellMate hadir sebagai SSH client yang **ringan, modern, dan sepenuhnya lokal** — data tersimpan di device user sendiri, tidak ada server pihak ketiga, dan tidak ada biaya langganan. ShellMate dirancang untuk mendukung **koneksi ke banyak server SSH secara bersamaan** dan dapat diakses dari **berbagai device**, termasuk desktop, laptop, dan smartphone (Android & iOS).
+ShellMate hadir sebagai SSH client yang **modern, lengkap, dan sepenuhnya lokal** — data tersimpan di device user sendiri, tidak ada server pihak ketiga, dan tidak ada biaya langganan. Ditujukan sebagai produk full v1.0 — bukan MVP — dengan dukungan desktop dan mobile, sinkronisasi end-to-end-encrypted via cloud milik user, plugin system, team vault, audit log, dan ekstensi protokol seperti Mosh.
 
 ### 1.2 Tujuan Produk
 
 **Tujuan Utama:**
 
-1. **Multi-SSH Connection** — Memungkinkan user untuk terhubung ke banyak server SSH secara bersamaan dalam satu aplikasi, masing-masing dalam tab/session independen, tanpa batas jumlah koneksi aktif.
+1. **Multi-SSH Connection** — Terhubung ke banyak server SSH secara bersamaan dalam satu aplikasi, masing-masing dalam tab/session independen, tanpa batas jumlah koneksi aktif. Termasuk **broadcast mode** untuk mengirim command ke beberapa session sekaligus.
 
-2. **Multi-Device Support** — ShellMate tersedia di semua platform utama: desktop (Windows, macOS, Linux) **dan** mobile (Android & iOS), dengan data dan konfigurasi yang dapat disinkronkan antar device secara opsional.
+2. **Multi-Device, Multi-Platform** — Tersedia di Windows, macOS, Linux, **Android**, dan **iOS**. UI adaptif untuk masing-masing form factor (keyboard-first di desktop, touch + extended key bar di mobile).
 
-**Tujuan Lainnya:**
+3. **Multi-Device Sync (E2E Encrypted)** — Sinkronisasi hosts, snippets, dan settings antar device secara opsional via user's own cloud (iCloud, GDrive, Dropbox, S3, WebDAV) atau self-hosted endpoint. Data dienkripsi di device sebelum upload — provider sync tidak bisa membaca isinya.
 
-- Menyediakan SSH client modern dengan UX yang bersih dan cepat
-- Menyimpan semua data (hosts, credentials, snippets) secara lokal di device user
-- Mendukung koneksi ke banyak server sekaligus via multi-tab
-- Ringan di sumber daya sistem (CPU, RAM, disk)
-- Open-source friendly dan self-hostable
+4. **Local-First & Privacy by Default** — Tidak ada server ShellMate yang terlibat. Semua state di device user. Telemetry zero. Vault terenkripsi dengan Argon2id + AES-256-GCM. Full-DB encryption via SQLCipher.
+
+5. **Extensible** — Plugin system untuk fitur custom. Custom themes. Mosh support sebagai tambahan SSH.
+
+**Tujuan Sekunder:**
+
+- UX modern (clean, fast, keyboard-first di desktop; touch-friendly di mobile)
+- Biometric unlock (Face ID, Touch ID, Windows Hello, Android Fingerprint)
+- Team / sharing vault — share host config terenkripsi via team key
+- Audit log untuk session start/end, file transfer, command history
+- SFTP file browser dengan drag-and-drop
+- Port forwarding (local & remote)
+- Open-source (MIT)
 
 ### 1.3 Target Pengguna
 
 | Segmen | Deskripsi |
 |--------|-----------|
-| **Developer** | Full-stack / backend dev yang sering SSH ke server staging/production dari desktop maupun HP |
-| **DevOps / SysAdmin** | Manage banyak server sekaligus, butuh organisasi host yang baik dan akses dari mana saja |
-| **Security Researcher** | Butuh tool ringan untuk koneksi cepat ke banyak target |
+| **Developer** | Full-stack / backend dev yang SSH ke server staging/production dari desktop maupun HP |
+| **DevOps / SysAdmin** | Manage banyak server sekaligus, butuh organisasi host, broadcast command, audit log |
+| **Security Researcher** | Tool ringan untuk koneksi cepat ke banyak target dengan privacy-first design |
 | **Power User** | User teknis yang ingin kontrol penuh atas data dan tools mereka |
-| **Mobile User** | Developer/SysAdmin yang perlu SSH dari smartphone saat tidak di depan laptop |
+| **Mobile User** | Dev/SysAdmin yang perlu SSH dari smartphone saat tidak di depan laptop |
+| **Tim kecil** | 2-10 engineer yang ingin share host config tanpa pakai SaaS berbayar (Termius Premium dll) |
 
 ---
 
 ## 2. Scope
 
-### 2.1 In Scope (MVP — Desktop)
+ShellMate v1.0 adalah **production release** — bukan MVP. Scope dibagi per area, bukan per phase, dan dikerjakan scope-driven (no fixed timeline).
 
-- Manajemen hosts (add, edit, delete, group)
-- SSH terminal via WebView (xterm.js)
-- **Multi-tab session** — koneksi ke banyak server SSH sekaligus
-- Autentikasi via password dan SSH key
-- Penyimpanan lokal terenkripsi (SQLite + AES-256)
-- Snippets / command shortcuts
-- Port forwarding (Local & Remote)
-- SFTP file browser dasar
-- Platform: Windows, macOS, Linux
+### 2.1 Core Features (semua area in-scope untuk v1.0)
 
-### 2.2 Out of Scope (MVP)
+#### 2.1.1 Connection & Terminal
+- Multi-tab SSH session (tanpa batas hard, soft warning di 20)
+- 1 SSH connection per tab (per docs/04-backend §9)
+- Password & SSH key auth (dengan passphrase)
+- xterm.js terminal dengan ANSI colors, resize, copy/paste, search
+- Terminal tab broadcast mode — kirim input yang sama ke beberapa tab
+- SSH keepalive + auto-reconnect dengan exponential backoff
+- Known hosts management dengan TOFU + warning untuk key mismatch
+- **Mosh support** — fallback protocol untuk koneksi tidak stabil
 
-- Cloud sync / remote backup
-- Serial/Telnet connection
-- Terminal multiplexer (tmux-like)
-- Container management (Docker, K8s)
-- Plugin system
+#### 2.1.2 Host & Organization
+- Host CRUD (add, edit, delete, validate)
+- Host groups dengan nesting + drag-and-drop
+- Tags, notes, search
+- Import/export (encrypted JSON)
 
-### 2.3 Future Scope (Post-MVP)
+#### 2.1.3 Vault & Security
+- Argon2id key derivation (memory-hard)
+- AES-256-GCM untuk per-credential encryption
+- **SQLCipher untuk full-DB encryption** (semua metadata terlindungi)
+- Master password (length-first, 12-128 char per NIST SP 800-63B)
+- No-recovery rule + onboarding warning + acknowledge gate
+- Auto-lock after idle (configurable)
+- Manual lock (Ctrl+L)
+- Master password change with re-encryption
+- **Biometric unlock**: Face ID, Touch ID, Windows Hello, Android Fingerprint
+- Memory zeroize (Rust `zeroize`)
 
-- **Mobile App (Android & iOS)** — Tauri v2 mobile target; UI adaptif untuk layar kecil dan touch input, termasuk virtual keyboard dengan tombol khusus (Tab, Ctrl, Esc, arrow keys)
-- **Multi-Device Sync** — Sinkronisasi hosts, snippets, dan settings secara opsional via user's own cloud (iCloud, GDrive, S3) atau self-hosted endpoint; data tetap terenkripsi end-to-end
-- Export/import hosts (JSON terenkripsi)
-- Team/sharing vault
-- Audit log
-- Biometric unlock di mobile (Face ID, Fingerprint)
+#### 2.1.4 Productivity
+- Snippets (with template variables) + execution to active terminal
+- Settings (theme, font, shortcuts, auto-lock, keepalive, scrollback)
+- **Custom themes** — user-defined color schemes (terminal + UI)
+- Keyboard shortcuts (configurable)
+
+#### 2.1.5 File Transfer
+- SFTP file browser (browse, upload, download, rename, delete, mkdir)
+- Drag-and-drop upload
+- Progress indicator
+- Multiple SFTP windows per session
+- SFTP runs as separate channel on the parent session's SSH connection
+
+#### 2.1.6 Network
+- Port forwarding (Local `-L` & Remote `-R`)
+- Toggle rules without disconnecting
+- Port conflict detection
+
+#### 2.1.7 Multi-Device
+- **Desktop**: Windows 10+, macOS 12+, Ubuntu 20.04+ (and equivalent Linux)
+- **Mobile**: Android 10+, iOS 15+ via Tauri v2 mobile target
+- Mobile UI: extended key bar (Esc, Tab, Ctrl, Alt, arrows, pipes), bottom-sheet navigation, full-screen SFTP modal, touch-friendly tab switcher
+
+#### 2.1.8 Multi-Device Sync (E2E)
+- Optional: device tetap fungsional tanpa sync
+- User pilih backend: iCloud, GDrive, Dropbox, S3, WebDAV, atau self-hosted endpoint
+- Encryption: payload dienkripsi di device sebelum upload (XChaCha20-Poly1305 atau AES-256-GCM dengan per-vault key)
+- Conflict resolution: last-write-wins dengan timestamp + manual merge UI untuk konflik kompleks
+- Selective sync: user pilih hosts/snippets mana yang di-sync
+- Pause / disable kapan saja
+
+#### 2.1.9 Team & Sharing
+- **Team vault** — share host config terenkripsi via team key
+- Member management (add member with public key, revoke, key rotation)
+- Per-host share permissions (read-only / edit)
+- Conflict resolution untuk shared host changes
+
+#### 2.1.10 Plugin System
+- Extension API: registered hooks pre/post connect, terminal data filter, custom UI panels
+- WASM-based plugin runtime (sandboxed, no native code execution)
+- Plugin permissions model (network, filesystem, secrets — semua opt-in)
+- Plugin distribution: load from file, plugin manifest with signature
+
+#### 2.1.11 Audit & Observability
+- **Audit log** — session start/end, file transfer events, command history (opt-in per host)
+- Log encrypted at rest, viewable via UI
+- Export audit log (signed JSONL)
+- Local error logging (no external services), log rotation
+
+#### 2.1.12 Distribution & Updates
+- Code signing: Windows Authenticode, macOS notarization, Linux GPG-signed AppImage
+- **Auto-updater** via Tauri updater dengan signed releases
+- Multi-arch builds: Windows x64, macOS Intel + Apple Silicon, Linux x64 + arm64
+
+### 2.2 Out of Scope (v1.0)
+
+- Cloud-hosted ShellMate service (always self-hosted / user's own cloud)
+- Browser-based version
+- Serial port / Telnet (security and modernity reasons)
+- Container management (Docker, K8s) — pakai dedicated tool
+- Built-in tmux replacement (use real tmux on the server)
+- Telemetry/analytics
+- Subscription tiers / paywalled features
+
+### 2.3 Future Scope (post-1.0)
+
+- Hardware key auth (FIDO2 / YubiKey)
+- SSH agent forwarding (with explicit per-host opt-in)
+- Cloud provider integration (AWS Session Manager, GCP IAP, Azure Bastion)
+- Encrypted notes / runbooks per host
+- Workflow automation (chain snippets across hosts)
+- Public plugin registry
 
 ---
 
@@ -83,16 +168,22 @@ ShellMate hadir sebagai SSH client yang **ringan, modern, dan sepenuhnya lokal**
 
 | Layer | Teknologi | Alasan |
 |-------|-----------|--------|
-| App Framework | **Tauri v2** | Ringan (~5-10MB binary), pakai WebView OS bukan Chromium |
-| Frontend | **React 18 + Vite + TypeScript (strict)** | Familiar, ekosistem besar, cepat, type-safe |
-| Styling | **Tailwind CSS 3** | Utility-first, konsisten |
+| App Framework | **Tauri v2** | Ringan (~10-20MB binary), pakai WebView OS bukan Chromium. Mobile target untuk Android & iOS. |
+| Frontend | **React 18 + Vite + TypeScript (strict)** | Familiar, ekosistem besar, type-safe |
+| Styling | **Tailwind CSS 3** | Utility-first, konsisten, theming via CSS vars |
 | UI Components | **shadcn/ui** | Copy-paste components, accessible by default (Radix UI), customizable |
-| Terminal Emulator | **xterm.js** | Industry standard, feature-rich |
+| Mobile UI Adaptation | **Responsive React + Tauri mobile APIs** | Touch handlers, extended key bar, bottom-sheet navigation |
+| Terminal Emulator | **xterm.js** | Industry standard, feature-rich, search & WebGL addon |
 | SSH Backend | **Rust (`russh` crate)** | Native performance, credentials tidak keluar dari Rust layer |
-| Local Storage | **SQLite via `rusqlite`** | Ringan, reliable, satu file database |
-| Enkripsi | **AES-256-GCM + Argon2id** | Enkripsi credentials sebelum disimpan ke SQLite, key derivation memory-hard |
+| Mosh Client | **Rust (custom mosh-client port atau wrapper)** | UDP SSP transport, fallback dari SSH |
+| Local Storage | **SQLite via `rusqlite` + SQLCipher** | Full-DB encryption, single file |
+| Per-credential Encryption | **AES-256-GCM** (defense in depth on top of SQLCipher) | Belt-and-suspenders untuk credential data |
+| Key Derivation | **Argon2id** (memory-hard) | OWASP recommended |
+| Sync Layer | **Custom encrypt-then-upload** dengan adapter per backend (iCloud, GDrive, S3, WebDAV) | E2E encryption, no ShellMate server |
+| Plugin Runtime | **Wasmtime** (WASM, sandboxed) | Safe extension execution, capability-based permissions |
+| Biometric | **OS-native APIs** via Tauri plugins (Touch ID, Face ID, Windows Hello, Android BiometricPrompt) | Native UX |
 | State Management | **Zustand** | Simpel, ringan |
-| Package Manager | **Bun** (frontend), **Cargo** (backend) | Fast install, native tooling |
+| Package Manager | **npm** (frontend), **Cargo** (backend) | Cross-platform Windows compatibility |
 
 ### 3.2 Arsitektur Umum
 
@@ -202,7 +293,7 @@ Frontend: xterm.js render output
 
 ### 4.4 Multi-Tab Sessions (Multi-SSH Connection)
 
-**Deskripsi:** User dapat terhubung ke **banyak server SSH sekaligus** dalam satu window, masing-masing dalam tab independen. Ini adalah **tujuan utama produk** dan **core feature MVP** — ShellMate dirancang sejak awal untuk use case "connect ke banyak server secara bersamaan", bukan sekadar satu koneksi per window.
+**Deskripsi:** User dapat terhubung ke **banyak server SSH sekaligus** dalam satu window, masing-masing dalam tab independen. Ini adalah **tujuan utama produk** dan **core feature v1.0** — ShellMate dirancang sejak awal untuk use case "connect ke banyak server secara bersamaan", bukan sekadar satu koneksi per window.
 
 **Acceptance Criteria:**
 - Setiap koneksi SSH berjalan dalam tab independen dengan session terpisah
@@ -299,7 +390,7 @@ Credentials (passwords, private keys) → tersimpan di SQLite
 
 ---
 
-### 4.9 Mobile Support (Post-MVP)
+### 4.9 Mobile Support (Phase 10)
 
 **Deskripsi:** ShellMate tersedia di smartphone (Android & iOS) via Tauri v2 mobile target, memungkinkan user SSH dari HP kapan saja.
 
@@ -321,7 +412,7 @@ Baris tombol tambahan di atas virtual keyboard untuk karakter yang sering dipaka
 [Esc] [Tab] [Ctrl] [Alt] [↑] [↓] [←] [→] [|] [~] [-] [/]
 ```
 
-**Acceptance Criteria (Mobile MVP):**
+**Acceptance Criteria (Mobile, Phase 10):**
 - Semua fitur core SSH terminal berjalan di Android & iOS
 - **Multi-tab tetap tersedia** di mobile — user dapat switch antar server via swipe atau tab navigator
 - Extended key bar selalu tampil di atas virtual keyboard
@@ -332,7 +423,7 @@ Baris tombol tambahan di atas virtual keyboard untuk karakter yang sering dipaka
 
 ---
 
-### 4.10 Multi-Device Sync (Post-MVP)
+### 4.10 Multi-Device Sync (Phase 9)
 
 **Deskripsi:** Sinkronisasi konfigurasi (hosts, groups, snippets) antara desktop dan mobile secara opsional. Data selalu terenkripsi sebelum keluar dari device.
 
@@ -523,79 +614,116 @@ CREATE TABLE settings (
 | **Binary size** | < 20MB installer |
 | **SSH latency** | Overhead < 5ms dari native SSH client |
 | **Supported OS (Desktop)** | Windows 10+, macOS 12+, Ubuntu 20.04+ |
-| **Supported OS (Mobile)** | Android 10+, iOS 15+ *(Post-MVP)* |
+| **Supported OS (Mobile)** | Android 10+, iOS 15+ *(Phase 10)* |
 | **Offline** | Fully functional tanpa internet (kecuali koneksi ke server target) |
 
 ---
 
 ## 10. Milestones & Roadmap
 
-**Total MVP Desktop: 8 minggu** (6 minggu development + 2 minggu polish & buffer).
+ShellMate v1.0 dikerjakan **scope-driven** (no fixed timeline). Tiap milestone ship saat acceptance criteria terpenuhi. Milestone diberi target ordering, bukan deadline.
 
-### Milestone 1 — Project Setup (Week 1) ✅
-- [x] Scaffold Tauri v2 + React + Vite + TypeScript project
-- [x] Configure Tailwind CSS + shadcn/ui foundations
-- [x] SQLite setup + schema migrations
-- [x] Basic app layout (sidebar, tab bar, status bar, custom title bar)
+### Phase 1 — Project Setup ✅ (2026-06-09)
+- [x] Tauri v2 + React/Vite/TS scaffold
+- [x] Tailwind CSS 3 + custom dark theme
+- [x] SQLite schema + migrations
+- [x] Layout shell (sidebar, tab bar, status bar, custom title bar)
 - [x] Zustand stores (host, tab, ui)
-- [x] ESLint + Prettier + Husky + CI scaffold
+- [x] ESLint + Prettier + tsconfig strict
+- [x] MIT LICENSE + CHANGELOG
+- [x] CI ready (typecheck, lint, build all green)
 
-### Milestone 2 — Core SSH (Week 2-3) ✅
+### Phase 2 — Core SSH ✅ (2026-06-10)
 - [x] Vault: Argon2id + AES-256-GCM + zeroize
-- [x] Vault setup/unlock/lock flow + recovery warning UI
+- [x] Vault setup/unlock/lock + recovery warning UI
 - [x] SSH connection via password & key auth (russh)
-- [x] xterm.js terminal integration with SSH I/O streaming
-- [x] **Multi-tab session** *(core use case)*
-- [x] Connection sharing strategy untuk multi-tab same-host (1 conn/tab)
+- [x] xterm.js terminal integration
+- [x] Multi-tab session manager (1 connection per tab)
+- [x] QuickConnect form for testing
 
-### Milestone 3 — Host Management (Week 4)
-- [ ] Host CRUD (Rust + React)
-- [ ] Groups & tags
-- [ ] Host search
-- [ ] Host validation
-- [ ] Drag-and-drop host organization
+### Phase 3 — Host Management & Persistence ✅ (2026-06-10)
+- [x] Host CRUD UI (form, list, edit, delete)
+- [x] Groups + drag-and-drop
+- [x] Tags, notes, host search
+- [x] Save credentials via vault, connect from sidebar
+- [x] Host validation (frontend + backend sync)
 
-### Milestone 4 — Productivity Features (Week 5-6)
-- [ ] Snippets panel + execution to terminal
-- [ ] Settings dialog (theme, font, shortcuts, auto-lock)
-- [ ] Auto-lock vault setelah idle
-- [ ] Known hosts management + verification UI
-- [ ] Keyboard shortcuts
-- [ ] Terminal search (xterm.js addon)
+### Phase 4 — Productivity & Settings
+- [ ] Snippets panel (CRUD, search, execute to terminal, template variables)
+- [ ] Settings dialog (theme, font, shortcuts, keepalive, scrollback)
+- [ ] Custom themes (terminal + UI tokens)
+- [ ] Keyboard shortcuts (configurable)
+- [ ] Auto-lock UX wired (frontend polls `vault_check_idle`)
+- [ ] Master password change with full re-encryption
 
-### Milestone 5 — SFTP & Port Forwarding (Week 7)
+### Phase 5 — File Transfer & Network
 - [ ] SFTP file browser (browse, upload, download, rename, delete, mkdir)
-- [ ] Drag-and-drop upload
-- [ ] Port forwarding (local & remote)
-- [ ] Port conflict detection
+- [ ] SFTP drag-and-drop, progress indicator
+- [ ] Port forwarding (local & remote, toggle, conflict detection)
 
-### Milestone 6 — Polish & Release (Week 8)
-- [ ] Onboarding flow (first launch, vault setup with recovery warning)
-- [ ] Error handling + reconnect UI
-- [ ] Export/import hosts (JSON terenkripsi)
-- [ ] Cross-platform testing (Windows, macOS, Linux)
-- [ ] App packaging: Windows .msi, macOS .dmg, Linux .AppImage
-- [ ] User documentation
+### Phase 6 — Network Hardening
+- [ ] Known hosts table + verification UI
+- [ ] Auto-reconnect with exponential backoff
+- [ ] Mosh client integration (UDP SSP transport)
+- [ ] Broadcast mode (kirim command ke beberapa session)
+
+### Phase 7 — Full-DB Encryption
+- [ ] Migrate from per-field encryption only → SQLCipher full-DB encryption (defense in depth, both layers active)
+- [ ] Migration tool (one-shot for existing databases)
+- [ ] Performance benchmark before/after
+
+### Phase 8 — Biometric Unlock
+- [ ] Tauri plugin integration: Touch ID (macOS), Windows Hello, Face ID/fingerprint (mobile)
+- [ ] Vault key wrapped with biometric-protected secure enclave key
+- [ ] Fallback ke master password kalau biometric gagal/disabled
+
+### Phase 9 — Multi-Device Sync (E2E)
+- [ ] Sync engine architecture (encrypt-then-upload, manifest, conflict resolution)
+- [ ] Backend adapters: iCloud, GDrive, Dropbox, S3, WebDAV
+- [ ] Selective sync UI (per host/snippet/group)
+- [ ] Conflict merge UI
+- [ ] Sync log + diagnostic
+
+### Phase 10 — Mobile (Android & iOS)
+- [ ] Tauri v2 mobile target setup (Android first, then iOS)
+- [ ] Adaptive UI: bottom-sheet nav, full-screen panels
+- [ ] Extended key bar (Esc, Tab, Ctrl, Alt, arrows, pipe, tilde, slash)
+- [ ] Touch-friendly host list, tab switcher (swipe), SFTP modal
+- [ ] Mobile-specific shortcuts via gestures
+- [ ] Background reconnect handling
+- [ ] Notification on session disconnect
+
+### Phase 11 — Team Vault
+- [ ] Team member management (add via public key, revoke, key rotation)
+- [ ] Per-host share permissions (read-only / edit)
+- [ ] Encrypted host export with team key wrap
+- [ ] Conflict resolution for shared host changes
+
+### Phase 12 — Plugin System
+- [ ] Wasmtime runtime integration
+- [ ] Plugin API: hooks (pre/post connect, terminal data filter), custom UI panels
+- [ ] Capability-based permissions (network, fs, secrets — all opt-in per plugin)
+- [ ] Plugin manifest + signing
+- [ ] Plugin distribution: load from file, sample plugins shipped
+
+### Phase 13 — Audit Log
+- [ ] Audit event capture (session start/end, SFTP transfers, command history if opt-in per host)
+- [ ] Encrypted audit log storage
+- [ ] Audit log viewer UI (filter, search, export signed JSONL)
+- [ ] Privacy: opt-in per host, redaction rules
+
+### Phase 14 — Polish & Distribution
+- [ ] Onboarding flow (first-launch tutorial, vault setup walkthrough)
+- [ ] Error handling + reconnect UX
+- [ ] Export/import hosts (encrypted JSON) — fallback for sync-disabled users
+- [ ] Performance audit (bundle size, startup, memory)
+- [ ] Full a11y pass (axe-core CI, manual NVDA + VoiceOver)
+- [ ] Cross-platform testing
+- [ ] Code signing setup: Windows Authenticode, macOS notarization, Linux GPG
+- [ ] Tauri auto-updater with signed releases
+- [ ] App packaging: Windows .msi, macOS .dmg, Linux .AppImage + .deb, Android .apk/.aab, iOS via TestFlight then App Store
+- [ ] User documentation (install, getting started, features, troubleshooting)
 - [ ] Release v1.0.0
-
-### Post-MVP — Mobile App (Android & iOS)
-- [ ] Tauri v2 mobile target setup
-- [ ] Adaptive UI untuk layar kecil
-- [ ] Extended key bar (Esc, Tab, Ctrl, arrow keys)
-- [ ] Multi-tab navigation di mobile
-- [ ] Biometric unlock (Face ID, Fingerprint)
-- [ ] Touch-friendly SFTP browser
-
-### Post-MVP — Multi-Device Sync
-- [ ] Sync engine (encrypted export/import)
-- [ ] iCloud & GDrive backend
-- [ ] Self-hosted / WebDAV backend
-- [ ] Conflict resolution UI
-
-### Post-MVP — Advanced
-- [ ] Broadcast mode (kirim command ke banyak server sekaligus)
-- [ ] Auto-updater
-- [ ] Code signing (macOS notarization, Windows Authenticode)
 
 ---
 
@@ -604,17 +732,25 @@ CREATE TABLE settings (
 | # | Topik | Keputusan | Alasan |
 |---|-------|-----------|--------|
 | 1 | Nama final | **ShellMate** | Distinctive, sudah dipakai konsisten di docs |
-| 2 | Mosh support di MVP | **Skip** | russh tidak native support, scope creep |
-| 3 | SFTP scope | **Tetap MVP** | Core productivity feature, sudah commit di scope |
+| 2 | Mosh support | **In v1.0** (Phase 6) | User-driven scope expansion. Akan ditambahkan sebagai protocol fallback. |
+| 3 | SFTP scope | **In v1.0** (Phase 5) | Core productivity feature |
 | 4 | License | **MIT** | Permissive, kompatibel dengan tujuan open-source self-hostable |
-| 5 | Auto-updater di MVP | **Skip** | Manual download cukup untuk v1.0; butuh code signing infra |
-| 6 | Mobile: Android atau iOS dulu | **Android** | Dev cycle lebih cepat, tidak perlu Apple Developer cert |
-| 7 | Multi-device sync arsitektur | **User's own cloud only** | Sesuai prinsip "no ShellMate server", privacy-first |
-| 8 | Broadcast mode | **Post-MVP (v1.1)** | Bukan core MVP, complexity tidak sebanding untuk MVP |
-| 9 | Encryption granularity | **Per-credential field** (AES-256-GCM) untuk MVP, evaluasi SQLCipher post-MVP | Ringan, cukup untuk MVP threat model. Lihat 07-security-plan.md §11 |
-| 10 | Master password recovery | **No recovery** (lupa password = data hilang) | Standar untuk vault local-first, harus eksplisit di onboarding |
+| 5 | Auto-updater | **In v1.0** (Phase 14) | Production app butuh delivery channel. Tauri v2 updater dengan signing. |
+| 6 | Mobile platforms | **Android + iOS, Android first** | Android dev cycle lebih cepat (no Apple Developer cert untuk dev), iOS menyusul |
+| 7 | Multi-device sync arsitektur | **User's own cloud, no ShellMate server** | Privacy-first, sesuai prinsip local-first. E2E encryption sebelum upload. |
+| 8 | Broadcast mode | **In v1.0** (Phase 6) | Core productivity feature for sysadmin |
+| 9 | Encryption granularity | **Per-credential AES-256-GCM + SQLCipher full-DB encryption** (defense in depth) | Per-field melindungi credentials, SQLCipher melindungi metadata. Both layers active in v1.0. |
+| 10 | Master password recovery | **No recovery** (lupa password = data hilang) | Standar untuk vault local-first. UX explicit di onboarding. |
 | 11 | Master password policy | **Length-first** (min 12 karakter), tidak wajib karakter khusus | NIST SP 800-63B (2017+) rekomen length over complexity |
-| 12 | Connection sharing multi-tab | **1 SSH connection per tab** untuk MVP, evaluasi multi-channel post-MVP | Isolation lebih baik, lebih simpel. Lihat 04-backend-plan.md §11 |
+| 12 | Connection sharing multi-tab | **1 SSH connection per tab** untuk v1.0 | Isolation lebih baik, lebih simpel. Multiplex evaluasi post-1.0. |
+| 13 | Plugin system | **In v1.0** (Phase 12) — Wasmtime sandbox | Capability-based permissions, no native code execution. Safety-first extensibility. |
+| 14 | Team / sharing vault | **In v1.0** (Phase 11) | Differentiator vs Termius (yang paywall team feature). |
+| 15 | Audit log | **In v1.0** (Phase 13), opt-in per host | Privacy default off, useful for compliance / DevOps. |
+| 16 | Custom themes | **In v1.0** (Phase 4) | UX expectation untuk modern terminal app. |
+| 17 | Biometric unlock | **In v1.0** (Phase 8) — desktop + mobile | UX critical untuk frequent unlock. Tauri plugin per OS. |
+| 18 | Mobile mode terminal protocol | **SSH first, Mosh as enhancement** | Mosh sangat valuable di mobile (network changes), tapi SSH dulu. |
+| 19 | Sync conflict strategy | **Last-write-wins + manual merge UI** untuk konflik kompleks | Sederhana untuk umum, fleksibel untuk power user. |
+| 20 | Versioning approach | **Scope-driven, no fixed timeline** | Phase ship saat acceptance terpenuhi. Quality > deadline. |
 
 ---
 

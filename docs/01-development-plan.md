@@ -1,9 +1,9 @@
 # Development Plan
-## ShellMate - SSH Client Desktop App
+## ShellMate — SSH Client (Production v1.0)
 
-**Version:** 1.3
+**Version:** 2.1
 **Last Updated:** 2026-06-10
-**Timeline:** 8 weeks (MVP Desktop)
+**Approach:** Scope-driven phases, no fixed timeline — each phase ships when acceptance criteria are met.
 
 ---
 
@@ -11,12 +11,41 @@
 
 | Phase | Status | Completed | Notes |
 |-------|--------|-----------|-------|
-| Phase 1: Project Setup | ✅ Complete | 2026-06-09 | Tauri v2 + React/Vite/TS scaffold, SQLite schema, layout shell, stores, lint/typecheck/build all green |
-| Phase 2: Core SSH | ✅ Complete | 2026-06-10 | Vault (Argon2id + AES-256-GCM), russh integration, xterm terminal, multi-tab session manager, QuickConnect for testing |
-| Phase 3: Host Management | ⏳ Pending | — | CRUD UI, groups, search |
-| Phase 4: Vault & Security | ⏳ Pending | — | Auto-lock UX, known_hosts verification, master password change |
-| Phase 5: Advanced Features | ⏳ Pending | — | Snippets, settings, SFTP, port forwarding |
-| Phase 6: Polish & Release | ⏳ Pending | — | Onboarding, packaging, docs |
+| Phase 1: Project Setup | ✅ Complete | 2026-06-09 | Tauri v2 + React/Vite/TS scaffold, SQLite schema, layout shell, stores |
+| Phase 2: Core SSH | ✅ Complete | 2026-06-10 | Vault (Argon2id + AES-256-GCM), russh integration, xterm terminal, multi-tab session manager |
+| Phase 3: Host Management & Persistence | ✅ Complete | 2026-06-10 | Host CRUD UI, Group CRUD, drag-and-drop, host search, connect from sidebar |
+| Phase 4: Productivity & Settings | ⏳ Pending | — | Snippets, settings, custom themes, configurable shortcuts |
+| Phase 5: File Transfer & Network | ⏳ Pending | — | SFTP, port forwarding |
+| Phase 6: Network Hardening | ⏳ Pending | — | Known hosts UI, auto-reconnect, Mosh, broadcast mode |
+| Phase 7: Full-DB Encryption | ⏳ Pending | — | SQLCipher migration (defense in depth) |
+| Phase 8: Biometric Unlock | ⏳ Pending | — | Touch ID, Face ID, Windows Hello, Android Fingerprint |
+| Phase 9: Multi-Device Sync (E2E) | ⏳ Pending | — | iCloud, GDrive, Dropbox, S3, WebDAV adapters |
+| Phase 10: Mobile Apps | ⏳ Pending | — | Android first, iOS next |
+| Phase 11: Team Vault | ⏳ Pending | — | Shared host configs, key rotation |
+| Phase 12: Plugin System | ⏳ Pending | — | Wasmtime sandbox, capability permissions |
+| Phase 13: Audit Log | ⏳ Pending | — | Opt-in per host, encrypted, exportable |
+| Phase 14: Polish & Distribution | ⏳ Pending | — | Code signing, auto-updater, a11y, release |
+
+---
+
+## 1. Development Methodology
+
+- **Approach:** Scope-driven, iterative; each phase has explicit acceptance criteria and ships when met
+- **Version Control:** Git with feature branch workflow
+- **Code Reviews:** Required for all merges to main
+- **Testing:** Unit tests for critical paths (crypto, vault, db), integration tests for SSH (Docker test container), E2E for full flows
+- **No fixed timeline** — quality gates over deadlines
+
+### 1.1 Team Structure
+- **Primary Developer:** Matt (Full-stack)
+- **AI Assistant:** OpenCode / Claude (code generation, debugging, documentation review)
+
+### 1.2 Development Environment
+- **OS:** Windows 11 (primary), macOS/Linux (cross-platform testing)
+- **IDE:** VS Code / Cursor / OpenCode
+- **Terminal:** PowerShell / Windows Terminal / Git Bash
+- **Package Manager:** npm (frontend), Cargo (backend)
+- **Rust toolchain:** MSVC stable (pinned via `rust-toolchain.toml`)
 
 ### Phase 1 Deliverables (Done)
 
@@ -68,7 +97,7 @@
 - ✅ Internal `load_credential_plaintext` (Rust-only, never exposed to frontend) used by SSH connect
 
 **SSH** (`src-tauri/src/ssh/`):
-- ✅ `handler.rs` — minimal russh client handler (TOFU host key acceptance for MVP, known_hosts deferred to Phase 4)
+- ✅ `handler.rs` — minimal russh client handler (TOFU host key acceptance for now, known_hosts UI in Phase 6)
 - ✅ `session.rs` — `SessionManager` with `Arc<RwLock<HashMap>>`, one async task per session
   - **Strategy**: 1 SSH connection per tab (per docs/04-backend-plan §9)
   - PTY request, shell channel, keepalive (60s interval, max 3 retries)
@@ -79,7 +108,7 @@
 
 **SSH commands** (`src-tauri/src/commands/ssh.rs`):
 - ✅ `ssh_connect` — connect by host_id (loads + decrypts credential via vault)
-- ✅ `ssh_quick_connect` — one-off connection without saving credential (for testing & MVP demo)
+- ✅ `ssh_quick_connect` — one-off connection without saving credential (for testing & demo)
 - ✅ `ssh_send`, `ssh_resize`, `ssh_disconnect`
 
 **Frontend**:
@@ -105,7 +134,7 @@
 ### Phase 2 Decisions Made During Implementation
 
 - **russh version**: 0.45 (not 0.50+). Older API: `authenticate_*` returns `bool`, `client::Handler::check_server_key` takes `key::PublicKey` (not `ssh_key::PublicKey`), `decode_secret_key` returns `KeyPair` directly used as `Arc<KeyPair>` for `authenticate_publickey`. 0.50+ has breaking changes that require additional adapter work — defer upgrade until needed.
-- **Host key verification**: TOFU-accepting handler for MVP. Known_hosts table + verification UI deferred to Phase 4 milestone (per 07-security §6.1).
+- **Host key verification**: TOFU-accepting handler for now. Known_hosts table + verification UI in Phase 6 (per 07-security §6.1).
 - **Verifier scheme**: Use a fixed plaintext (`b"shellmate.vault.v1"`) encrypted with derived key. Decryption + constant-time compare proves password without storing key hash separately. AES-GCM auth tag already provides integrity.
 - **No password recovery**: hardcoded into UX per 07-security §4.1.2. Setup form blocks submit until user explicitly checks the acknowledgement.
 - **xterm tab persistence**: `ContentArea` keeps all terminals mounted with `visibility: hidden` to preserve state across tab switches. Avoids xterm reinit cost and scrollback loss.
@@ -115,210 +144,273 @@
 
 ---
 
-## 1. Development Overview
+## 2. Phase 1: Project Setup ✅
 
-### 1.1 Methodology
-- **Approach:** Iterative development with weekly milestones
-- **Version Control:** Git with feature branch workflow
-- **Code Reviews:** Required for all merges to main
-- **Testing:** Unit tests for critical paths, integration tests for SSH
-
-### 1.2 Team Structure
-- **Primary Developer:** Matt (Full-stack)
-- **AI Assistant:** OpenCode / Claude (code generation, debugging, documentation review)
-
-### 1.3 Development Environment
-- **OS:** Windows 11 (primary), macOS/Linux (cross-platform testing)
-- **IDE:** VS Code / Cursor / OpenCode
-- **Terminal:** PowerShell / Windows Terminal / Git Bash
-- **Package Manager:** Bun (frontend), Cargo (backend)
+**Status:** Complete (2026-06-09). See §0 Progress Tracker for deliverables and decisions.
 
 ---
 
-## 2. Phase 1: Project Setup (Week 1)
+## 3. Phase 2: Core SSH ✅
 
-### 2.1 Day 1-2: Scaffold Project
-**Tasks:**
-- [x] Initialize Tauri v2 project with React + Vite template
-- [x] Configure Tailwind CSS with custom theme
-- [x] Set up TypeScript strict mode
-- [x] Configure ESLint + Prettier
-- [x] Initialize Git repository with .gitignore
-- [x] Create README.md and basic documentation
-
-**Deliverables:**
-- ✅ Working Tauri app that opens a window
-- ✅ Basic development environment configured
-- ✅ Git repository with initial commit
-
-### 2.2 Day 3-4: Database Setup
-**Tasks:**
-- [x] Add rusqlite dependency to Cargo.toml
-- [x] Create database schema (SQLite)
-- [x] Implement database initialization
-- [x] Create migration system
-- [x] Set up database path per OS
-
-**Deliverables:**
-- ✅ SQLite database created on app start
-- ✅ Schema migrations running successfully
-- ✅ Database module ready for queries
-
-### 2.3 Day 5-7: Basic UI Layout
-**Tasks:**
-- [x] Create main app layout (sidebar + content area)
-- [x] Implement custom title bar
-- [x] Create sidebar with host list placeholder
-- [x] Add tab bar for terminal sessions
-- [x] Implement status bar
-- [x] Set up Zustand stores (host, tab, UI)
-
-**Deliverables:**
-- ✅ Responsive app layout
-- ✅ Sidebar with placeholder content
-- ✅ Tab bar ready for terminal tabs
-- ✅ Basic state management working
+**Status:** Complete (2026-06-10). See §0 Progress Tracker for deliverables and decisions.
 
 ---
 
-## 3. Phase 2: Core SSH Feature (Week 2-3)
+## 4. Phase 3: Host Management & Persistence ✅
 
-### 3.1 Week 2: SSH Backend
-**Tasks:**
-- [x] Add russh dependency to Cargo.toml
-- [x] Implement SSH connection handler
-- [x] Add password authentication
-- [x] Add SSH key authentication
-- [x] Implement SSH session management
-- [x] Add SSH keepalive support
-- [x] Create Tauri commands for SSH operations
+**Status:** Complete (2026-06-10)
 
-**Deliverables:**
-- ✅ SSH connection to remote server working
-- ✅ Password and key auth implemented
-- ✅ Session management functional
-- ✅ Tauri commands ready for frontend
+### Acceptance Criteria
+- [x] Host CRUD UI: form (add, edit), list, delete with confirmation
+- [x] Validation matches backend rules (hostname, port range, auth_type, username)
+- [x] Group CRUD: create, rename, delete (orphan handling), color, nesting
+- [x] Drag-and-drop: reorder hosts within group, move between groups
+- [ ] Tag input with autocomplete from existing tags (basic comma-separated input shipped; autocomplete deferred to Phase 4)
+- [x] Notes field (markdown preview deferred to Phase 4)
+- [x] Host search: hostname, label, tag, group name, notes (client-side filter for performance)
+- [x] Save credential via vault, connect from sidebar (uses `ssh_connect`)
+- [x] Empty states for no hosts, no groups, no search results
 
-### 3.2 Week 3: Terminal Integration
-**Tasks:**
-- [x] Add xterm.js to frontend
-- [x] Create Terminal component wrapper
-- [x] Implement SSH ↔ Terminal data streaming
-- [x] Add terminal resize support
-- [x] Implement copy/paste functionality (xterm built-in)
-- [ ] Add terminal search (xterm.js addon) — deferred to Phase 5
-- [x] Create multi-tab terminal manager
+### Phase 3 Deliverables (Done)
 
-**Deliverables:**
-- ✅ Interactive SSH terminal working
-- ✅ Multi-tab sessions functional
-- ✅ Terminal resize and copy/paste working
-- ✅ Vault integration: setup, unlock, lock, idle check
-- ✅ QuickConnect form for one-off testing
+**Backend** (`src-tauri/src/commands/`):
+- ✅ `group.rs` — `get_groups`, `create_group`, `update_group`, `delete_group`, `move_host_to_group`
+  - Validation: name required, hex color format check, prevent self-parent cycle
+  - Delete cascades: hosts in deleted group become ungrouped, sub-groups become detached
+- ✅ `host.rs` extended with `search_hosts` — multi-field LIKE query (label, hostname, username, group name, tags, notes)
+- ✅ Wired all new commands into `lib.rs`
 
----
+**Frontend**:
+- ✅ `lib/tauri.ts` extended with `groups.list/create/update/delete` and `hosts.search/moveToGroup`
+- ✅ `types/host.ts` added `GroupInput` interface
+- ✅ `stores/host-store.ts` rewritten with full state: `hosts`, `groups`, `searchQuery`, `expandedGroups`, plus actions for CRUD on both entities, search, group expansion, and host-to-group moves
+- ✅ UI primitives:
+  - `components/ui/Button.tsx` (4 variants × 2 sizes)
+  - `components/ui/Form.tsx` (`Input`, `Textarea`, `Select`, `Field` with error/hint)
+  - `components/ui/Modal.tsx` (focus trap, Esc-to-close, click-outside, accessible)
+  - `components/ui/ConfirmDialog.tsx`
+- ✅ Host management:
+  - `components/hosts/HostForm.tsx` — add/edit modal with validation, supports password and SSH key auth, tag parsing, notes
+  - `components/hosts/HostItem.tsx` — sidebar item with drag-and-drop, right-click context menu (connect/edit/delete), double-click to connect, group color dot, hostname tooltip
+  - `components/hosts/HostList.tsx` — grouped sections, expand/collapse, drag-over visual feedback, empty + no-results states
+  - `components/hosts/GroupForm.tsx` — create/edit with preset color swatches + custom hex input
+- ✅ `Sidebar` rewritten:
+  - Loads hosts + groups when vault unlocks
+  - Connected search input to host store
+  - Renders real `HostList` (replaces placeholder groups)
+  - Add Host + New Group action buttons
 
-## 4. Phase 3: Host Management (Week 4)
+### Phase 3 Decisions Made During Implementation
 
-### 4.1 Week 4: Host CRUD
-**Tasks:**
-- [ ] Create Host data model (Rust + TypeScript)
-- [ ] Implement host CRUD in backend
-- [ ] Create HostList component
-- [ ] Create HostForm component (add/edit)
-- [ ] Add host validation
-- [ ] Implement host groups
-- [ ] Add drag-and-drop for host organization
-- [ ] Create host search functionality
+- **Search strategy**: client-side filter using already-loaded hosts (since dataset is small, ms response). Backend `search_hosts` available for future server-side filter (e.g., when audit log query joins).
+- **Drag-and-drop**: native HTML5 drag-and-drop with `application/x-shellmate-host` MIME. Group section is drop target; ungrouped section is also a target. No external lib needed.
+- **Group sort**: sort by `sort_order` first, then alphabetical. UI for reordering groups deferred (drag groups themselves) — Phase 4 candidate.
+- **Credential lifecycle**: when editing a host, blank credential field means "keep existing"; non-blank creates a new credential row. Old credential row is NOT auto-deleted on host edit (could be referenced elsewhere later) — only on host delete.
+- **Tags**: comma-separated input. Autocomplete with existing tags deferred to Phase 4.
+- **Markdown notes**: plain textarea for now. Rich preview deferred to Phase 4.
+- **Modal lib**: lightweight in-house Modal (~50 lines) to avoid pulling shadcn/Dialog + @radix-ui/react-dialog before we have full design system needs. Will swap to shadcn/ui Dialog in Phase 4 when more dialog patterns appear.
+- **UI primitives prefix**: `components/ui/` (matches shadcn convention). Avoid `components/common/` etc. for consistency.
+- **Group nesting**: schema supports `parent_id` (Phase 1 schema), backend enforces self-parent rejection. UI for tree-display nested groups not yet implemented — flat group list shipped. Tree UI deferred to Phase 4 if user feedback demands it.
+- **Connect flow**: click connect (or Enter / double-click) creates a frontend tab and calls `ssh_connect(host_id)`. Backend pulls credential via vault, frontend `bind`s tab id ↔ session id. Existing Phase 2 Terminal subscribes to events automatically.
 
-**Deliverables:**
-- Add, edit, delete hosts working
-- Host groups with expand/collapse
-- Host search functional
-- Data persisted to SQLite
-
----
-
-## 5. Phase 4: Vault & Security (Week 5)
-
-### 5.1 Week 5: Credential Encryption
-**Tasks:**
-- [ ] Implement Argon2id key derivation
-- [ ] Add AES-256-GCM encryption
-- [ ] Create vault unlock/setup flow
-- [ ] Implement credential storage
-- [ ] Add auto-lock after idle
-- [ ] Implement manual lock (Ctrl+L)
-- [ ] Add master password change
-- [ ] Secure memory handling (zeroize)
-
-**Deliverables:**
-- Credentials encrypted at rest
-- Vault lock/unlock working
-- Auto-lock after idle
-- Secure credential retrieval
+### Verified
+- ✅ `npm run typecheck` exit 0
+- ✅ `npm run lint` exit 0
+- ✅ `npm run format:check` clean
+- ✅ `npm run build` — 533 KB / 147 KB gzipped (within 500 KB gzipped budget)
+- ✅ `cargo build` — incremental 0.73s, 8 forward-compat warnings (unchanged from Phase 2)
 
 ---
 
-## 6. Phase 5: Advanced Features (Week 6-7)
+## 5. Phase 4: Productivity & Settings
 
-### 6.1 Week 6: Snippets & Settings
-**Tasks:**
-- [ ] Create Snippet data model
-- [ ] Implement snippet CRUD
-- [ ] Create SnippetList component
-- [ ] Add snippet execution to terminal
-- [ ] Implement snippet search
-- [ ] Create Settings dialog
-- [ ] Add terminal settings (font, size, cursor)
-- [ ] Add theme settings (dark/light)
+### Acceptance Criteria
+- [ ] Snippet CRUD with template variables (`{{username}}`, `{{host}}`, custom)
+- [ ] Snippet panel (Ctrl+K), search, execute to active terminal
+- [ ] Settings dialog: General, Terminal, Vault, Shortcuts, Theme
+- [ ] Custom theme editor: terminal palette + UI tokens, preview, export/import theme JSON
+- [ ] Keyboard shortcut customization with conflict detection
+- [ ] Auto-lock UX: frontend polls `vault_check_idle`, dispatches lock when fired
+- [ ] Master password change: re-derives key, re-encrypts all credentials, atomic
+- [ ] Settings persist to SQLite `settings` table
 
-**Deliverables:**
-- Snippet management working
-- Snippets executable to terminal
-- Settings dialog functional
-- Theme switching working
-
-### 6.2 Week 7: SFTP & Port Forwarding
-**Tasks:**
-- [ ] Implement SFTP client in Rust
-- [ ] Create SFTP browser UI
-- [ ] Add file upload/download
-- [ ] Implement file operations (rename, delete, mkdir)
-- [ ] Add drag-and-drop upload
-- [ ] Implement port forwarding rules
-- [ ] Add port forwarding status display
-- [ ] Create port conflict detection
-
-**Deliverables:**
-- SFTP file browser working
-- File upload/download functional
-- Port forwarding configurable
-- Port conflicts detected
+### Out of Scope
+- SFTP, port forwarding (Phase 5)
+- Multi-device sync of settings (Phase 9)
 
 ---
 
-## 7. Phase 6: Polish & Release (Week 8)
+## 6. Phase 5: File Transfer & Network
 
-### 7.1 Week 8: Polish & Packaging
-**Tasks:**
-- [ ] Add keyboard shortcuts
-- [ ] Implement error handling & toast notifications
-- [ ] Add reconnect UI for disconnected sessions
-- [ ] Create onboarding flow
-- [ ] Add export/import hosts (JSON)
-- [ ] Performance optimization
-- [ ] Cross-platform testing (Windows, macOS, Linux)
-- [ ] Create installers (MSI, DMG, AppImage)
-- [ ] Write user documentation
-- [ ] Prepare release notes
+### Acceptance Criteria
+- [ ] SFTP browser opens as panel within active session
+- [ ] Directory listing: name, size, permissions, modified date, file type icon
+- [ ] Navigation: up, into directory, breadcrumb, address bar
+- [ ] Operations: upload (drag-drop + picker), download, rename, delete, mkdir
+- [ ] Progress indicator for transfers > 1 MB
+- [ ] Multiple SFTP windows per session
+- [ ] SFTP runs as separate channel on parent SSH connection
+- [ ] Port forwarding: local (-L) and remote (-R) rules per host
+- [ ] Toggle rule on/off without disconnecting
+- [ ] Conflict detection: clear error if local port already bound
 
-**Deliverables:**
-- All keyboard shortcuts working
-- Error handling throughout app
-- Cross-platform builds working
-- Installers created
-- Documentation complete
+### Out of Scope
+- SFTP search (post-1.0)
+- Dynamic forwarding (-D) (post-1.0)
+
+---
+
+## 7. Phase 6: Network Hardening
+
+### Acceptance Criteria
+- [ ] Known hosts table populated on first connect (TOFU)
+- [ ] Verification UI: show fingerprint, ask user to trust
+- [ ] On key mismatch: warning dialog with old vs new fingerprint, options (trust new, abort, view details)
+- [ ] Auto-reconnect: exponential backoff (1s, 2s, 5s, 10s, 30s, 60s max)
+- [ ] User-cancellable reconnect with status visible in tab
+- [ ] **Mosh client**: spawn mosh-server via SSH, then UDP transport
+- [ ] Mosh tab shows roaming/dropped state distinctly
+- [ ] **Broadcast mode**: select multiple tabs, single input field broadcasts keystrokes
+- [ ] Visual indicator on broadcasted tabs
+
+### Out of Scope
+- Cloud provider integration (post-1.0)
+
+---
+
+## 8. Phase 7: Full-DB Encryption (SQLCipher)
+
+### Acceptance Criteria
+- [ ] Migration tool: detect existing plaintext SQLite DB, prompt user, re-create with SQLCipher
+- [ ] Master password derivation produces both vault key (Argon2id) and DB key (separate output via HKDF)
+- [ ] All existing per-credential AES-GCM encryption stays in place (defense in depth)
+- [ ] Read/write performance regression < 15% on benchmark
+- [ ] Migration is atomic: succeeds fully or rolls back
+- [ ] Backup of pre-migration DB is created before migration
+
+### Out of Scope
+- Plaintext DB support (drop after migration)
+
+---
+
+## 9. Phase 8: Biometric Unlock
+
+### Acceptance Criteria
+- [ ] Touch ID (macOS), Windows Hello, Android BiometricPrompt, iOS Face/Touch ID
+- [ ] Vault key wrapped with biometric-protected secure enclave key
+- [ ] Fallback to master password if biometric fails or is disabled
+- [ ] User can enable/disable biometric per device in settings
+- [ ] Biometric state survives app restart
+- [ ] Failed biometric attempts do NOT count toward master password lockout
+
+### Out of Scope
+- Hardware key auth like YubiKey (post-1.0)
+
+---
+
+## 10. Phase 9: Multi-Device Sync (E2E)
+
+### Acceptance Criteria
+- [ ] Sync engine: encrypt-then-upload, manifest tracking, version vector clocks
+- [ ] Backend adapters: iCloud (macOS/iOS), GDrive, Dropbox, S3, WebDAV, self-hosted endpoint
+- [ ] Selective sync: per host, per snippet, per group
+- [ ] Conflict resolution: last-write-wins by default, manual merge UI for marked conflicts
+- [ ] Sync log + diagnostic panel (last sync time, errors, data transferred)
+- [ ] Pause/disable any time
+- [ ] Verification: cloud provider cannot read sync payload (manual test with `aws s3 cp` etc.)
+
+### Security Acceptance
+- [ ] All payloads encrypted with vault-derived key before upload
+- [ ] No metadata leakage in object names, paths, or headers (use opaque IDs)
+
+### Out of Scope
+- Real-time sync (sync triggered on change with debounce, or manual)
+- Multi-user merge (covered by Team Vault, Phase 11)
+
+---
+
+## 11. Phase 10: Mobile Apps (Android & iOS)
+
+### Acceptance Criteria
+- [ ] Tauri v2 mobile target builds successfully for Android and iOS
+- [ ] Adaptive UI: bottom-sheet navigation, full-screen panels, swipe between tabs
+- [ ] **Extended key bar**: Esc, Tab, Ctrl, Alt, ↑↓←→, |, ~, -, /, configurable
+- [ ] Touch-friendly host list, tab switcher, SFTP modal
+- [ ] Pinch-to-zoom on terminal font size
+- [ ] Auto-rotate (portrait + landscape)
+- [ ] Background reconnect with notification on disconnect
+- [ ] Biometric unlock works (Phase 8 prerequisite)
+- [ ] Performance: cold start < 3s, 60fps scroll
+
+### Out of Scope
+- Tablet-specific UI optimization (use phone UI scaled up for v1.0)
+
+---
+
+## 12. Phase 11: Team Vault
+
+### Acceptance Criteria
+- [ ] Team creation: generate team key pair (encrypted with team master password)
+- [ ] Member management: add member by public key, revoke, key rotation
+- [ ] Per-host share: select hosts to share with team, set permissions (read-only / edit)
+- [ ] Encrypted host config wrapped with team key
+- [ ] Conflict resolution: same as personal sync, last-write-wins + merge UI
+- [ ] Audit trail of share/revoke events (only when audit log Phase 13 also enabled)
+
+### Out of Scope
+- Roles & RBAC beyond read/edit (post-1.0)
+- SSO integration (post-1.0)
+
+---
+
+## 13. Phase 12: Plugin System
+
+### Acceptance Criteria
+- [ ] Wasmtime runtime integrated, sandboxed
+- [ ] Plugin API hooks: `pre_connect`, `post_connect`, `terminal_data_in`, `terminal_data_out`, `register_panel`
+- [ ] Capability-based permissions: `network`, `filesystem`, `secrets` — all opt-in per plugin via manifest
+- [ ] Plugin manifest format with signature
+- [ ] Plugin distribution: load from local file (drag-drop or file picker)
+- [ ] Plugin permissions UI: review on install, revoke later
+- [ ] Sample plugins shipped: theme installer, prompt customizer, log viewer
+- [ ] Plugin crashes do NOT crash the host app
+
+### Out of Scope
+- Public plugin registry (post-1.0)
+- WASI advanced features beyond what plugin API needs
+
+---
+
+## 14. Phase 13: Audit Log
+
+### Acceptance Criteria
+- [ ] Audit event capture: session start/end, SFTP transfers, command history (opt-in per host)
+- [ ] Encrypted audit log storage (own vault key)
+- [ ] Viewer UI: filter by host, date range, event type, search
+- [ ] Export: signed JSONL with timestamps and event chain hash
+- [ ] Privacy: redaction rules for known patterns (passwords in command, etc.)
+- [ ] Retention policy: configurable (30/60/90/365 days, never)
+
+### Out of Scope
+- Real-time alerts (post-1.0)
+- SIEM integration (post-1.0)
+
+---
+
+## 15. Phase 14: Polish & Distribution
+
+### Acceptance Criteria
+- [ ] Onboarding flow: first-launch tutorial, vault setup walkthrough, sample data offer
+- [ ] Error handling: toast notifications, reconnect UI for disconnected sessions
+- [ ] Encrypted host export/import (offline backup option)
+- [ ] Performance audit: bundle size, startup, memory all within targets
+- [ ] **Full a11y pass**: axe-core CI gate, manual NVDA + VoiceOver smoke test
+- [ ] Cross-platform testing: Windows, macOS, Linux, Android, iOS
+- [ ] **Code signing**: Windows Authenticode, macOS notarization, Linux GPG
+- [ ] **Tauri auto-updater**: signed releases, opt-in beta channel
+- [ ] App packaging: Windows .msi, macOS .dmg (Intel + ARM), Linux .AppImage + .deb, Android .apk + .aab, iOS via TestFlight
+- [ ] User documentation: install guide, getting started, features, troubleshooting per platform
+- [ ] Release v1.0.0
 
 ---
 
@@ -365,7 +457,7 @@
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Scope creep | High | Strict MVP scope, defer non-essential features |
+| Scope creep | High | Acceptance-criteria-driven phases; out-of-scope items move to post-1.0 backlog explicitly |
 | Technical blockers | Medium | Research key libraries early, have fallback options |
 | Testing time | Medium | Write tests alongside code, not after |
 
@@ -388,11 +480,13 @@
 - [ ] Demo ready
 
 ### 10.3 Release Done
-- [ ] All MVP features complete
-- [ ] Cross-platform testing passed
-- [ ] Installers created and tested
-- [ ] Documentation complete
+- [ ] All v1.0 phase acceptance criteria met
+- [ ] Cross-platform testing passed (Windows, macOS, Linux, Android, iOS)
+- [ ] Code-signed and notarized installers
+- [ ] Auto-updater verified
+- [ ] User documentation complete
 - [ ] Release notes written
+- [ ] Security review pass
 
 ---
 
@@ -409,4 +503,4 @@
 
 ---
 
-*This development plan provides a structured approach to building ShellMate MVP within 8 weeks. Adjust timeline as needed based on progress.*
+*This development plan defines a scope-driven path to ShellMate v1.0 production release. Phases ship when acceptance criteria are met — no fixed deadlines.*

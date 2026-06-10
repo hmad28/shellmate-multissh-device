@@ -206,3 +206,55 @@ pub async fn delete_host(state: State<'_, AppState>, id: String) -> AppResult<()
     }
     Ok(())
 }
+
+/// Free-text search across host label, hostname, username, group name, and tags.
+/// Case-insensitive substring match.
+#[tauri::command]
+pub async fn search_hosts(
+    state: State<'_, AppState>,
+    query: String,
+) -> AppResult<Vec<Host>> {
+    let q = query.trim();
+    if q.is_empty() {
+        return get_hosts(state).await;
+    }
+    let pattern = format!("%{}%", q.to_lowercase());
+
+    let conn = state.db.lock();
+    let mut stmt = conn.prepare(
+        "SELECT h.id, h.label, h.hostname, h.port, h.username, h.auth_type,
+                h.credential_id, h.group_id, h.tags, h.notes,
+                h.created_at, h.updated_at
+         FROM hosts h
+         LEFT JOIN groups g ON g.id = h.group_id
+         WHERE LOWER(h.label) LIKE ?1
+            OR LOWER(h.hostname) LIKE ?1
+            OR LOWER(h.username) LIKE ?1
+            OR LOWER(COALESCE(g.name, '')) LIKE ?1
+            OR LOWER(COALESCE(h.tags, '')) LIKE ?1
+            OR LOWER(COALESCE(h.notes, '')) LIKE ?1
+         ORDER BY h.label ASC",
+    )?;
+    let rows = stmt.query_map([&pattern], |row| {
+        let tags_json: Option<String> = row.get(8)?;
+        let tags = tags_json
+            .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+            .unwrap_or_default();
+        Ok(Host {
+            id: row.get(0)?,
+            label: row.get(1)?,
+            hostname: row.get(2)?,
+            port: row.get::<_, i64>(3)? as u16,
+            username: row.get(4)?,
+            auth_type: row.get(5)?,
+            credential_id: row.get(6)?,
+            group_id: row.get(7)?,
+            tags,
+            notes: row.get(9)?,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
+        })
+    })?;
+    let hosts: Result<Vec<_>, _> = rows.collect();
+    Ok(hosts?)
+}

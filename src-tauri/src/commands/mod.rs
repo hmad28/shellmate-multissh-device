@@ -1,4 +1,5 @@
 pub mod credential;
+pub mod group;
 pub mod host;
 pub mod settings;
 pub mod ssh;

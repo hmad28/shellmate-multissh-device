@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Host, HostInput } from '@/types/host';
+import type { Group, GroupInput, Host, HostInput } from '@/types/host';
 import type { Setting } from '@/types/settings';
 import type {
   ConnectByHostInput,
@@ -19,6 +19,16 @@ export const tauri = {
     update: (id: string, input: HostInput) =>
       invoke<Host>('update_host', { id, input }),
     delete: (id: string) => invoke<void>('delete_host', { id }),
+    search: (query: string) => invoke<Host[]>('search_hosts', { query }),
+    moveToGroup: (hostId: string, groupId: string | null) =>
+      invoke<void>('move_host_to_group', { hostId, groupId }),
+  },
+  groups: {
+    list: () => invoke<Group[]>('get_groups'),
+    create: (input: GroupInput) => invoke<Group>('create_group', { input }),
+    update: (id: string, input: GroupInput) =>
+      invoke<Group>('update_group', { id, input }),
+    delete: (id: string) => invoke<void>('delete_group', { id }),
   },
   settings: {
     list: () => invoke<Setting[]>('get_settings'),

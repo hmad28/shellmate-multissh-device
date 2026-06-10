@@ -1,10 +1,25 @@
-import { Search, Plus, Code2, Settings as SettingsIcon } from 'lucide-react';
+import { useEffect } from 'react';
+import { Search, Code2, Settings as SettingsIcon } from 'lucide-react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
+import { HostList } from '@/components/hosts/HostList';
+import { useHostStore } from '@/stores/host-store';
 import { useUiStore, type ActivePanel } from '@/stores/ui-store';
+import { useVaultStore } from '@/stores/vault-store';
 
 export function Sidebar() {
   const { sidebarCollapsed, activePanel, setActivePanel } = useUiStore();
+  const vaultUnlocked = useVaultStore((s) => s.unlocked);
+  const loadAll = useHostStore((s) => s.loadAll);
+  const searchQuery = useHostStore((s) => s.searchQuery);
+  const setSearchQuery = useHostStore((s) => s.setSearchQuery);
+
+  // Load hosts + groups when vault unlocks
+  useEffect(() => {
+    if (vaultUnlocked) {
+      void loadAll();
+    }
+  }, [vaultUnlocked, loadAll]);
 
   if (sidebarCollapsed) return null;
 
@@ -17,38 +32,10 @@ export function Sidebar() {
       aria-label="Hosts sidebar"
     >
       <div className="border-b border-border-subtle p-3">
-        <SearchInput />
+        <SearchInput value={searchQuery} onChange={setSearchQuery} />
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-2" aria-label="Host groups">
-        <HostGroupPlaceholder
-          name={strings.sidebar.groups.production}
-          count={0}
-        />
-        <HostGroupPlaceholder name={strings.sidebar.groups.staging} count={0} />
-        <HostGroupPlaceholder
-          name={strings.sidebar.groups.development}
-          count={0}
-        />
-
-        <div className="mt-4 px-2 text-xs text-fg-subtle">
-          {strings.sidebar.noHosts}
-        </div>
-      </nav>
-
-      <div className="border-t border-border-subtle p-2">
-        <button
-          type="button"
-          className={cn(
-            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm',
-            'text-fg transition-colors hover:bg-bg-elevated',
-          )}
-          aria-label={strings.sidebar.addHost}
-        >
-          <Plus size={14} />
-          <span>{strings.sidebar.addHost}</span>
-        </button>
-      </div>
+      <HostList />
 
       <div className="border-t border-border-subtle p-1">
         <PanelButton
@@ -70,7 +57,13 @@ export function Sidebar() {
   );
 }
 
-function SearchInput() {
+function SearchInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div className="relative">
       <Search
@@ -80,6 +73,8 @@ function SearchInput() {
       />
       <input
         type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={strings.sidebar.searchPlaceholder}
         aria-label={strings.sidebar.searchPlaceholder}
         className={cn(
@@ -89,28 +84,6 @@ function SearchInput() {
           'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent',
         )}
       />
-    </div>
-  );
-}
-
-function HostGroupPlaceholder({
-  name,
-  count,
-}: {
-  name: string;
-  count: number;
-}) {
-  return (
-    <div className="mb-2">
-      <div
-        className={cn(
-          'flex items-center justify-between rounded px-2 py-1 text-xs font-medium uppercase tracking-wider',
-          'text-fg-muted',
-        )}
-      >
-        <span>{name}</span>
-        <span className="text-fg-subtle">{count}</span>
-      </div>
     </div>
   );
 }
