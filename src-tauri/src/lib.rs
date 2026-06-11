@@ -1,10 +1,14 @@
 // Prevents additional console window on Windows in release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod broadcast;
 mod commands;
 mod crypto;
 mod db;
 mod errors;
+mod known_hosts;
+mod port_forward;
+mod sftp;
 mod ssh;
 mod state;
 mod vault;
@@ -77,6 +81,26 @@ pub fn run() {
             commands::ssh::ssh_send,
             commands::ssh::ssh_resize,
             commands::ssh::ssh_disconnect,
+            // SFTP
+            commands::sftp::sftp_open,
+            commands::sftp::sftp_list,
+            commands::sftp::sftp_upload,
+            commands::sftp::sftp_download,
+            commands::sftp::sftp_rename,
+            commands::sftp::sftp_remove,
+            commands::sftp::sftp_mkdir,
+            commands::sftp::sftp_close,
+            // Port Forwarding
+            commands::port_forward::port_forward_create,
+            commands::port_forward::port_forward_list,
+            commands::port_forward::port_forward_remove,
+            commands::port_forward::port_forward_toggle,
+            // Known Hosts
+            commands::known_hosts::known_hosts_verify,
+            commands::known_hosts::known_hosts_trust,
+            commands::known_hosts::known_hosts_list,
+            commands::known_hosts::known_hosts_remove,
+            commands::known_hosts::known_hosts_set_trusted,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -30,6 +30,25 @@ ShellMate is built for developers, DevOps, and sysadmins who need:
 
 ## Features
 
+### Phase Status (Production-track v1.0)
+
+| Phase | Area | Status |
+|-------|------|--------|
+| 1 | Project Setup | ✅ |
+| 2 | Core SSH + Crypto Vault | ✅ |
+| 3 | Host Management & Persistence | ✅ |
+| 4 | Productivity & Settings | ✅ |
+| 5 | File Transfer & Network (SFTP, Port Forwarding) | ✅ |
+| 6 | Network Hardening (TOFU, Auto-reconnect, Broadcast) | ✅ |
+| 7 | Full-DB Encryption (SQLCipher) | 🔜 |
+| 8 | Biometric Unlock | 🔜 |
+| 9 | Multi-Device Sync (E2E) | 🔜 |
+| 10 | Mobile Apps (Android, iOS) | 🔜 |
+| 11 | Team Vault | 🔜 |
+| 12 | Plugin System (Wasmtime) | 🔜 |
+| 13 | Audit Log | 🔜 |
+| 14 | Polish & Distribution | 🔜 |
+
 ### Completed Phases
 
 #### Phase 1: Project Setup ✅
@@ -70,8 +89,6 @@ ShellMate is delivered scope-driven (no fixed timeline). Each phase ships when a
 
 | Phase | Area | Highlights |
 |-------|------|-----------|
-| 5 | File Transfer & Network | SFTP browser, drag-and-drop upload, port forwarding (local & remote) |
-| 6 | Network Hardening | Known hosts UI, auto-reconnect, **Mosh support**, **broadcast mode** |
 | 7 | Full-DB Encryption | **SQLCipher** migration, defense in depth on top of per-credential AES-GCM |
 | 8 | Biometric Unlock | Touch ID, Face ID, Windows Hello, Android Fingerprint |
 | 9 | Multi-Device Sync (E2E) | iCloud, GDrive, Dropbox, S3, WebDAV adapters, conflict merge UI |
@@ -110,6 +127,7 @@ For full details see [PRD.md §10 Milestones](PRD.md) and [docs/01-development-p
 | SSH Backend | Rust via [`russh`](https://crates.io/crates/russh) crate |
 | Mosh | Rust (planned, Phase 6) |
 | Local Storage | SQLite via [`rusqlite`](https://crates.io/crates/rusqlite) + SQLCipher (Phase 7) |
+| SFTP | [`russh-sftp`](https://crates.io/crates/russh-sftp) |
 | Encryption | AES-256-GCM + Argon2id |
 | Plugin Runtime | Wasmtime (WASM sandbox, Phase 12) |
 | State | [Zustand](https://github.com/pmndrs/zustand) — lightweight React state |
@@ -160,26 +178,32 @@ shellmate/
 ├── src/                        # React frontend
 │   ├── components/
 │   │   ├── connect/            # Quick connection forms
-│   │   ├── hosts/              # Host & group management UI components
+│   │   ├── hosts/              # Host & group management UI
 │   │   ├── layout/             # App shell (TitleBar, Sidebar, StatusBar, TabBar)
-│   │   ├── settings/           # Tabbed settings dialog & panels (General, Terminal, Vault, Theme)
-│   │   ├── snippets/           # Snippets list, form, and interactive execute panel
-│   │   ├── terminal/           # xterm.js terminal view and subscription
-│   │   ├── ui/                 # Reusable UI primitives (Button, Modal, Form, Confirm)
-│   │   └── vault/              # Vault security gate forms
-│   ├── hooks/                  # React custom hooks (useAutoLock, etc.)
-│   ├── stores/                 # Zustand state stores (host, tab, ui, vault, settings, snippet)
-│   ├── themes/                 # Built-in theme configurations & variables application logic
-│   ├── lib/                    # Utilities, snippet parsing, and typed Tauri invoke wrappers
+│   │   ├── port-forward/       # Port forwarding rules panel
+│   │   ├── security/           # Host key verification dialog (TOFU)
+│   │   ├── settings/           # Tabbed settings dialog (General, Terminal, Vault, Theme)
+│   │   ├── sftp/               # SFTP file browser
+│   │   ├── snippets/           # Snippet list, form, execute panel
+│   │   ├── terminal/           # xterm.js terminal + broadcast mode panel
+│   │   ├── ui/                 # Reusable primitives (Button, Modal, Form, Confirm)
+│   │   └── vault/              # Vault unlock & setup forms
+│   ├── hooks/                  # Custom hooks (useAutoLock, etc.)
+│   ├── stores/                 # Zustand stores (host, tab, ui, vault, settings, snippet, sftp, port-forward, broadcast)
+│   ├── themes/                 # Built-in theme configurations
+│   ├── lib/                    # Utilities, snippet expansion, typed Tauri invoke wrappers
 │   ├── types/                  # TypeScript interface definitions
-│   └── styles/                 # Tailwind global configurations
+│   └── styles/                 # Tailwind global configuration
 ├── src-tauri/                  # Rust backend (Tauri native wrapper)
 │   ├── src/
-│   │   ├── commands/           # IPC command routes (host, group, credential, vault, ssh, snippet, theme)
-│   │   ├── db/                 # SQLite integration, schema definition, and migration runner
-│   │   ├── crypto/             # AES-256-GCM encryption and Argon2id KDF primitives
-│   │   ├── ssh/                # russh multi-session tasks and PTY managers
-│   │   ├── vault/              # Master lock state machines and secure memory buffer
+│   │   ├── commands/           # IPC routes (host, group, vault, ssh, snippet, theme, sftp, port_forward, known_hosts, broadcast)
+│   │   ├── db/                 # SQLite schema + migration runner
+│   │   ├── crypto/             # AES-256-GCM + Argon2id primitives
+│   │   ├── ssh/                # russh multi-session, PTY, reconnect, broadcast
+│   │   ├── sftp/               # russh-sftp subsystem manager
+│   │   ├── port_forward/       # Local & remote port forwarding
+│   │   ├── known_hosts/        # TOFU host key verification
+│   │   ├── vault/              # Master lock state machine + secure memory buffer
 │   │   └── lib.rs
 │   ├── Cargo.toml
 │   └── tauri.conf.json

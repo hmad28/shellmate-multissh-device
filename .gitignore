@@ -30,3 +30,14 @@ npm-debug.log*
 *.tmp
 .opencode/node_modules/
 
+# Agent / tooling configs (local only)
+.agent/
+.agents/
+.claude/skills/
+.commandcode/
+.kiro/
+_bmad/
+.opencode/
+.remember/
+memory/
+

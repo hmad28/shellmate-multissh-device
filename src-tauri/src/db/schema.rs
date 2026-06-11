@@ -95,4 +95,23 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     CREATE INDEX IF NOT EXISTS idx_themes_is_builtin ON themes(is_builtin);
     "#,
     ),
+    (
+        "003_known_hosts",
+        r#"
+    CREATE TABLE IF NOT EXISTS known_hosts (
+        id TEXT PRIMARY KEY,
+        hostname TEXT NOT NULL,
+        port INTEGER NOT NULL DEFAULT 22,
+        key_type TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        public_key_blob BLOB NOT NULL,
+        trusted INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_known_hosts_hostname_port ON known_hosts(hostname, port);
+    CREATE INDEX IF NOT EXISTS idx_known_hosts_fingerprint ON known_hosts(fingerprint);
+    "#,
+    ),
 ];

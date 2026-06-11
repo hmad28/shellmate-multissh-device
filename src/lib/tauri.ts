@@ -8,6 +8,28 @@ import type {
   QuickConnectInput,
   VaultStatus,
 } from '@/types/ssh';
+import type {
+  SftpFile,
+  SftpOpenInput,
+  SftpListInput,
+  SftpUploadInput,
+  SftpDownloadInput,
+  SftpRenameInput,
+  SftpPathInput,
+  SftpCloseInput,
+} from '@/types/sftp';
+import type {
+  PortForwardRule,
+  PortForwardCreateInput,
+  PortForwardListInput,
+  PortForwardIdInput,
+} from '@/types/port-forward';
+import type {
+  KnownHost,
+  HostKeyVerificationResult,
+  VerifyHostKeyInput,
+  TrustHostKeyInput,
+} from '@/types/known-hosts';
 
 /**
  * Typed wrappers around Tauri `invoke`.
@@ -79,6 +101,48 @@ export const tauri = {
       invoke<void>('ssh_resize', { sessionId, cols, rows }),
     disconnect: (sessionId: string) =>
       invoke<void>('ssh_disconnect', { sessionId }),
+  },
+  sftp: {
+    open: (input: SftpOpenInput) => invoke<string>('sftp_open', { input }),
+    list: (input: SftpListInput) => invoke<SftpFile[]>('sftp_list', { input }),
+    upload: (input: SftpUploadInput) => invoke<void>('sftp_upload', { input }),
+    download: (input: SftpDownloadInput) =>
+      invoke<void>('sftp_download', { input }),
+    rename: (input: SftpRenameInput) => invoke<void>('sftp_rename', { input }),
+    remove: (input: SftpPathInput) => invoke<void>('sftp_remove', { input }),
+    mkdir: (input: SftpPathInput) => invoke<void>('sftp_mkdir', { input }),
+    close: (input: SftpCloseInput) => invoke<void>('sftp_close', { input }),
+  },
+  portForward: {
+    create: (input: PortForwardCreateInput) =>
+      invoke<PortForwardRule>('port_forward_create', { input }),
+    list: (input: PortForwardListInput) =>
+      invoke<PortForwardRule[]>('port_forward_list', { input }),
+    remove: (input: PortForwardIdInput) =>
+      invoke<void>('port_forward_remove', { input }),
+    toggle: (input: PortForwardIdInput) =>
+      invoke<PortForwardRule>('port_forward_toggle', { input }),
+  },
+  knownHosts: {
+    verify: (input: VerifyHostKeyInput) =>
+      invoke<HostKeyVerificationResult>('known_hosts_verify', { input }),
+    trust: (input: TrustHostKeyInput) =>
+      invoke<KnownHost>('known_hosts_trust', { input }),
+    list: () => invoke<KnownHost[]>('known_hosts_list'),
+    remove: (id: string) => invoke<void>('known_hosts_remove', { id }),
+    setTrusted: (id: string, trusted: boolean) =>
+      invoke<void>('known_hosts_set_trusted', { id, trusted }),
+  },
+  broadcast: {
+    add: (sessionId: string) =>
+      invoke<void>('broadcast_add', { sessionId }),
+    remove: (sessionId: string) =>
+      invoke<void>('broadcast_remove', { sessionId }),
+    isActive: (sessionId: string) =>
+      invoke<boolean>('broadcast_is_active', { sessionId }),
+    getSessions: () => invoke<string[]>('broadcast_get_sessions'),
+    send: (sessionId: string, data: string) =>
+      invoke<void>('broadcast_send', { sessionId, data }),
   },
   app: {
     version: () => invoke<string>('app_version'),

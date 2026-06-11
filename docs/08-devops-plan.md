@@ -12,7 +12,7 @@
 | Tool | Version | Purpose |
 |------|---------|---------|
 | Node.js | 20.x LTS | Frontend development |
-| Bun | 1.x | JavaScript runtime |
+| npm | 10.x | Package manager |
 | Rust | Latest stable | Backend development |
 | Cargo | Latest | Rust package manager |
 | Git | Latest | Version control |
@@ -52,15 +52,9 @@ if ! command -v rustc &> /dev/null; then
     source ~/.cargo/env
 fi
 
-# Check Bun
-if ! command -v bun &> /dev/null; then
-    echo "📦 Installing Bun..."
-    curl -fsSL https://bun.sh/install | bash
-fi
-
 # Install frontend dependencies
 echo "📦 Installing frontend dependencies..."
-bun install
+npm install
 
 # Install Tauri CLI
 echo "📦 Installing Tauri CLI..."
@@ -69,7 +63,7 @@ cargo install tauri-cli
 echo "✅ Setup complete!"
 echo ""
 echo "To start development:"
-echo "  bun run dev"
+echo "  npm run tauri:dev"
 ```
 
 ---
@@ -168,14 +162,14 @@ bun run build:tauri:debug
 ### 3.2 Test Commands
 ```bash
 # Frontend tests
-bun run test
-bun run test:coverage
+npm run test
+npm run test:coverage
 
 # Backend tests
 cd src-tauri && cargo test
 
 # All tests
-bun run test && cd src-tauri && cargo test
+npm run test && cd src-tauri && cargo test
 ```
 
 ---
@@ -211,16 +205,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
           
       - name: Install dependencies
-        run: bun install
-          
+        run: npm ci
+
       - name: Lint
-        run: bun run lint
+        run: npm run lint
         
       - name: Type check
-        run: bun run typecheck
+        run: npm run typecheck
         
       - name: Test frontend
-        run: bun run test
+        run: npm run test
         
       - name: Test backend
         run: cd src-tauri && cargo test
@@ -249,7 +243,7 @@ jobs:
         # ... setup steps
       
       - name: Build
-        run: bun run build
+        run: npm run tauri:build
         
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -301,13 +295,13 @@ module.exports = {
 }
 ```
 
-### 5.3 Pre-commit Hooks
+### 13. Performance Budget Enforcement
 ```bash
 # Install husky
-bun add -D husky
+npm add -D husky
 
 # Setup pre-commit hook
-bunx husky add .husky/pre-commit "bun run lint && bun run typecheck"
+npx husky add .husky/pre-commit "npm run lint && npm run typecheck"
 ```
 
 ---

@@ -656,16 +656,16 @@ ShellMate v1.0 dikerjakan **scope-driven** (no fixed timeline). Tiap milestone s
 - [x] Auto-lock UX wired (frontend polls `vault_check_idle`)
 - [x] Master password change with full re-encryption
 
-### Phase 5 — File Transfer & Network
-- [ ] SFTP file browser (browse, upload, download, rename, delete, mkdir)
-- [ ] SFTP drag-and-drop, progress indicator
-- [ ] Port forwarding (local & remote, toggle, conflict detection)
+### Phase 5 — File Transfer & Network ✅ (2026-06-10)
+- [x] SFTP file browser (browse, upload, download, rename, delete, mkdir)
+- [x] SFTP drag-and-drop, progress indicator
+- [x] Port forwarding (local & remote, toggle, conflict detection)
 
-### Phase 6 — Network Hardening
-- [ ] Known hosts table + verification UI
-- [ ] Auto-reconnect with exponential backoff
-- [ ] Mosh client integration (UDP SSP transport)
-- [ ] Broadcast mode (kirim command ke beberapa session)
+### Phase 6 — Network Hardening ✅ (2026-06-10)
+- [x] Known hosts table + verification UI (TOFU with fingerprint display)
+- [x] Auto-reconnect with exponential backoff (1s→60s)
+- [x] Broadcast mode (kirim command ke beberapa session)
+- [ ] Mosh client integration (UDP SSP transport) — **deferred to Phase 14**
 
 ### Phase 7 — Full-DB Encryption
 - [ ] Migrate from per-field encryption only → SQLCipher full-DB encryption (defense in depth, both layers active)

@@ -1,4 +1,5 @@
 use crate::errors::{AppError, AppResult};
+use crate::known_hosts::KnownHostsManager;
 use crate::ssh::handler::ClientHandler;
 use parking_lot::Mutex as PlMutex;
 use russh::client;
@@ -80,12 +81,14 @@ enum OutboundMsg {
 
 pub struct SessionManager {
     sessions: PlMutex<HashMap<String, Session>>,
+    known_hosts: Arc<KnownHostsManager>,
 }
 
 impl SessionManager {
-    pub fn new() -> Self {
+    pub fn new(known_hosts: Arc<KnownHostsManager>) -> Self {
         Self {
             sessions: PlMutex::new(HashMap::new()),
+            known_hosts,
         }
     }
 
@@ -126,8 +129,14 @@ impl SessionManager {
                 None,
             );
 
-            if let Err(e) =
-                run_session(app_for_task.clone(), session_id_for_task.clone(), params, rx).await
+            if let Err(e) = run_session(
+                app_for_task.clone(),
+                session_id_for_task.clone(),
+                params,
+                rx,
+                Arc::clone(&mgr.known_hosts),
+            )
+            .await
             {
                 log::warn!("ssh session {session_id_for_task} ended with error: {e}");
                 emit_status(
@@ -206,6 +215,7 @@ async fn run_session(
     session_id: String,
     params: ConnectParams,
     mut rx: mpsc::UnboundedReceiver<OutboundMsg>,
+    known_hosts: Arc<KnownHostsManager>,
 ) -> AppResult<()> {
     let config = client::Config {
         inactivity_timeout: Some(Duration::from_secs(0)), // disabled; we use keepalive instead
@@ -214,10 +224,18 @@ async fn run_session(
         ..Default::default()
     };
 
+    let handler = ClientHandler::new(
+        known_hosts,
+        params.hostname.clone(),
+        params.port,
+        app.clone(),
+        session_id.clone(),
+    );
+
     let mut handle = client::connect(
         Arc::new(config),
         (params.hostname.as_str(), params.port),
-        ClientHandler,
+        handler,
     )
     .await
     .map_err(|e| AppError::Internal(format!("ssh connect failed: {e}")))?;

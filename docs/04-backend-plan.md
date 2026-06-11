@@ -13,8 +13,8 @@
 |------------|---------|---------|
 | Rust | Latest stable | Core language |
 | Tauri | v2.x | App framework |
-| russh | 0.44.x | SSH implementation |
-| rusqlite | 0.31.x | SQLite bindings |
+| russh | 0.45.x | SSH implementation |
+| rusqlite | 0.32.x | SQLite bindings |
 | argon2 | 0.5.x | Key derivation |
 | aes-gcm | 0.10.x | Encryption |
 | uuid | 1.x | ID generation |
@@ -692,9 +692,9 @@ edition = "2021"
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.31", features = ["bundled"] }
-russh = "0.44"
-russh-keys = "0.44"
+rusqlite = { version = "0.32", features = ["bundled"] }
+russh = "0.45"
+russh-keys = "0.45"
 argon2 = "0.5"
 aes-gcm = "0.10"
 uuid = { version = "1", features = ["v4"] }

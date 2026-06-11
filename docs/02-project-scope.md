@@ -156,7 +156,7 @@ ShellMate v1.0 ships as a complete production release. All items below are requi
 
 ---
 
-## 5. User Stories
+## 6. User Stories
 
 ### 5.1 Host Management
 ```

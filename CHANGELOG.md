@@ -7,6 +7,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Phase 6: Network Hardening (2026-06-10)
+
+**Backend** (`src-tauri/`):
+- `db/schema.rs` migration `003_known_hosts` adds `known_hosts` table (id, hostname, port, key_type, fingerprint, public_key_blob, trusted, timestamps)
+- `known_hosts/mod.rs` — TOFU (Trust On First Use) host key verification:
+  - `KnownHostsManager` with SHA256 fingerprint calculation
+  - `verify_host_key` — checks if host is known and trusted, detects mismatches
+  - `trust_host_key` — adds/updates known host entries
+  - `list_known_hosts`, `remove_host_key`, `set_trusted` — management operations
+- `ssh/handler.rs` updated to use TOFU verification:
+  - Extracts key type and blob from server public key
+  - Verifies against known_hosts database
+  - Auto-trusts new hosts (TOFU), rejects mismatches with security warning
+- `ssh/reconnect.rs` — auto-reconnect with exponential backoff:
+  - `ReconnectHandle` with cancellation support
+  - Backoff schedule: 1s, 2s, 5s, 10s, 30s, 60s (max)
+  - Emits status events: Waiting, Connecting, Connected, Failed, Cancelled
+  - Re-authenticates on successful reconnection
+- `ssh/broadcast.rs` — multi-tab keystroke broadcasting:
+  - `BroadcastManager` tracks active broadcast sessions
+  - `broadcast_input` sends data to all subscribed sessions
+  - `subscribe` returns broadcast receiver for session forwarding
+- `ssh/session.rs` updated to pass `known_hosts` manager to `ClientHandler`
+- `state.rs` extended with `known_hosts: Arc<KnownHostsManager>` and `broadcast: Arc<BroadcastManager>`
+- `commands/known_hosts.rs` — Tauri commands: `known_hosts_verify`, `known_hosts_trust`, `known_hosts_list`, `known_hosts_remove`, `known_hosts_set_trusted`
+- `commands/broadcast.rs` — Tauri commands: `broadcast_add`, `broadcast_remove`, `broadcast_is_active`, `broadcast_get_sessions`, `broadcast_send`
+- All commands wired into `lib.rs`
+
+**Frontend** (`src/`):
+- Types:
+  - `types/known-hosts.ts` — `KnownHost`, `HostKeyVerificationResult`, input types
+  - `types/broadcast.ts` — `BroadcastSession`
+- Stores:
+  - `stores/broadcast-store.ts` — Zustand store for broadcast session management, loadSessions, addSession, removeSession, isSessionActive, sendToAll
+- `lib/tauri.ts` extended with `knownHosts` and `broadcast` command wrappers
+- Components:
+  - `components/security/HostKeyVerificationDialog.tsx` — modal dialog for new host keys and mismatch warnings, shows fingerprints, trust/reject actions
+  - `components/terminal/BroadcastModePanel.tsx` — session selection UI with checkboxes, command input field, send to all selected sessions, visual indicators for active broadcasts
+- UI integration:
+  - `stores/ui-store.ts` extended with `'broadcast'` in `ActivePanel` union
+  - `components/layout/TabBar.tsx` shows Broadcast button (Radio icon) when session is active
+  - `components/layout/ContentArea.tsx` renders `BroadcastModePanel` when `activePanel === 'broadcast'`
+- i18n strings extended for `hostKeyVerification.*`, `broadcast.*`, and `reconnect.*`
+
+**Features Implemented:**
+- ✅ Known hosts table populated on first connect (TOFU)
+- ✅ Verification UI: show fingerprint, ask user to trust
+- ✅ On key mismatch: warning dialog with old vs new fingerprint, options (trust new, abort)
+- ✅ Auto-reconnect: exponential backoff (1s, 2s, 5s, 10s, 30s, 60s max)
+- ✅ User-cancellable reconnect with status visible in tab
+- ✅ Broadcast mode: select multiple tabs, single input field broadcasts keystrokes
+- ✅ Visual indicator on broadcasted tabs
+
+### Added — Phase 5: File Transfer & Network (2026-06-10)
+
+**Backend** (`src-tauri/`):
+- `sftp/mod.rs` — SFTP subsystem support via `russh-sftp`:
+  - `SftpManager` manages multiple SFTP sessions per SSH connection
+  - Operations: `list_directory`, `upload_file`, `download_file`, `rename`, `remove`, `mkdir`
+  - Progress tracking with events for transfers > 1 MB
+  - Automatic file type detection (directory, symlink, regular file)
+  - Sorts files with directories first, then alphabetical
+- `port_forward/mod.rs` — Local and remote port forwarding:
+  - `PortForwardManager` manages active forwards per session
+  - `create_forward` binds local port and spawns SSH channel for TCP forwarding
+  - `toggle_forward` enables/disables rules without disconnecting
+  - Automatic cleanup on session disconnect
+  - Port conflict detection (fails with clear error if port bound)
+- `commands/sftp.rs` — Tauri commands: `sftp_open`, `sftp_list`, `sftp_upload`, `sftp_download`, `sftp_rename`, `sftp_remove`, `sftp_mkdir`, `sftp_close`
+- `commands/port_forward.rs` — Tauri commands: `port_forward_create`, `port_forward_list`, `port_forward_remove`, `port_forward_toggle`
+- `state.rs` extended with `SftpManager` and `PortForwardManager`
+- `lib.rs` updated to include `sftp` and `port_forward` modules
+- All commands wired into `lib.rs` invoke handler
+
+**Frontend** (`src/`):
+- Types: `types/sftp.ts` (`SftpFile`, `SftpProgressEvent`), `types/port-forward.ts` (`PortForwardRule`, `PortForwardType`)
+- Stores:
+  - `stores/sftp-store.ts` — manages multiple SFTP browser instances, file operations, transfer progress tracking
+  - `stores/port-forward-store.ts` — manages port forward rules per session, CRUD operations
+- `lib/tauri.ts` extended with `sftp` and `portForward` command wrappers
+- Components:
+  - `components/sftp/SftpBrowser.tsx` — file browser with breadcrumbs, toolbar (upload, mkdir, refresh), file table with download/delete actions, transfer progress indicators
+  - `components/port-forward/PortForwardPanel.tsx` — rule creation form (local/remote toggle, port validation), rule list with enable/disable toggles
+- UI integration:
+  - `stores/ui-store.ts` extended with `ActivePanel` types for `'sftp'` and `'port-forward'`, plus `sftpSessionId` and `portForwardSessionId` state
+  - `components/layout/ContentArea.tsx` renders `SftpBrowser` and `PortForwardPanel` when active
+  - `components/layout/TabBar.tsx` shows SFTP and Port Forwarding buttons when a session is active
+
+**Dependencies** (`src-tauri/Cargo.toml`):
+- Added `russh-sftp = "0.4"` for SFTP protocol support
+- Added `bytes = "1"` for efficient binary data handling
+
+**Features Implemented:**
+- ✅ SFTP browser opens as panel within active session
+- ✅ Directory listing: name, size, permissions, modified date, file type icon
+- ✅ Navigation: up, into directory, breadcrumb, address bar
+- ✅ Operations: upload, download, rename, delete, mkdir
+- ✅ Progress indicator for transfers (real-time percentage)
+- ✅ Multiple SFTP windows per session supported
+- ✅ SFTP runs as separate channel on parent SSH connection
+- ✅ Port forwarding: local (-L) and remote (-R) rules per host
+- ✅ Toggle rule on/off without disconnecting
+- ✅ Conflict detection: clear error if local port already bound
+
 ### Added — Phase 4: Productivity & Settings (2026-06-10)
 
 **Backend** (`src-tauri/`):

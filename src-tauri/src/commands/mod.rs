@@ -1,7 +1,11 @@
+pub mod broadcast;
 pub mod credential;
 pub mod group;
 pub mod host;
+pub mod known_hosts;
+pub mod port_forward;
 pub mod settings;
+pub mod sftp;
 pub mod snippet;
 pub mod ssh;
 pub mod system;

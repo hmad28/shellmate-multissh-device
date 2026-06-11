@@ -4,6 +4,9 @@ import { QuickConnect } from '@/components/connect/QuickConnect';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { SnippetPanel } from '@/components/snippets/SnippetPanel';
 import { Terminal } from '@/components/terminal/Terminal';
+import { SftpBrowser } from '@/components/sftp/SftpBrowser';
+import { PortForwardPanel } from '@/components/port-forward/PortForwardPanel';
+import { BroadcastModePanel } from '@/components/terminal/BroadcastModePanel';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
 import { useUiStore } from '@/stores/ui-store';
@@ -14,10 +17,14 @@ import { useUiStore } from '@/stores/ui-store';
  *   - 'snippets': SnippetPanel
  *   - 'settings': SettingsDialog (modal-style takeover; but we render
  *     it in a centered surface for keyboard nav; closing returns to hosts)
+ *   - 'sftp': SftpBrowser for file transfers
+ *   - 'port-forward': PortForwardPanel for managing port forwards
  */
 export function ContentArea() {
   const activePanel = useUiStore((s) => s.activePanel);
   const setActivePanel = useUiStore((s) => s.setActivePanel);
+  const sftpSessionId = useUiStore((s) => s.sftpSessionId);
+  const portForwardSessionId = useUiStore((s) => s.portForwardSessionId);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -30,6 +37,35 @@ export function ContentArea() {
     return (
       <main className="flex flex-1 overflow-hidden bg-bg">
         <SnippetPanel />
+      </main>
+    );
+  }
+
+  if (activePanel === 'sftp' && sftpSessionId) {
+    return (
+      <main className="flex flex-1 overflow-hidden bg-bg">
+        <SftpBrowser
+          sessionId={sftpSessionId}
+          onClose={() => {
+            setActivePanel('hosts');
+          }}
+        />
+      </main>
+    );
+  }
+
+  if (activePanel === 'port-forward' && portForwardSessionId) {
+    return (
+      <main className="flex flex-1 overflow-hidden bg-bg p-6">
+        <PortForwardPanel sessionId={portForwardSessionId} />
+      </main>
+    );
+  }
+
+  if (activePanel === 'broadcast') {
+    return (
+      <main className="flex flex-1 overflow-hidden bg-bg p-6">
+        <BroadcastModePanel onClose={() => setActivePanel('hosts')} />
       </main>
     );
   }

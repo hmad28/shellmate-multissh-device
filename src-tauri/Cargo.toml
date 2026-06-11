@@ -35,11 +35,13 @@ rand = "0.8"
 subtle = "2.6"
 
 # SSH & async runtime
-russh = "0.45"
+russh = { version = "0.45", features = ["sftp"] }
 russh-keys = "0.45"
+russh-sftp = "0.4"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "sync", "time", "net"] }
 async-trait = "0.1"
 futures = "0.3"
+bytes = "1"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

@@ -218,4 +218,36 @@ export const strings = {
     waitingForConnection: 'Waiting for connection...',
     sessionEnded: 'Session ended.',
   },
+  hostKeyVerification: {
+    newHostTitle: 'New Host Key Detected',
+    mismatchTitle: 'Host Key Mismatch - Security Warning',
+    newHostMessage:
+      'This host is not in your known hosts list. Verify the fingerprint before trusting.',
+    mismatchWarning:
+      'WARNING: The host key has changed! This could indicate a man-in-the-middle attack. Verify the new fingerprint carefully.',
+    stored: 'Stored fingerprint',
+    presented: 'Presented fingerprint',
+    fingerprint: 'Fingerprint',
+    keyType: 'Key type',
+    trust: 'Trust & Connect',
+    trustNew: 'Trust New Key',
+    reject: 'Reject',
+  },
+  broadcast: {
+    title: 'Broadcast Mode',
+    sessions: 'sessions',
+    selectSessions: 'Select sessions to broadcast to',
+    sendCommand: 'Send command to all selected sessions',
+    commandPlaceholder: 'Enter command to broadcast...',
+    send: 'Send',
+    enable: 'Enable Broadcast',
+    disable: 'Disable Broadcast',
+  },
+  reconnect: {
+    waiting: 'Reconnecting in {delay}s (attempt {attempt})...',
+    connecting: 'Reconnecting (attempt {attempt})...',
+    failed: 'Reconnection failed: {error}',
+    cancelled: 'Reconnection cancelled',
+    cancel: 'Cancel',
+  },
 } as const;

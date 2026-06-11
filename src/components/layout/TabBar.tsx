@@ -1,15 +1,21 @@
-import { Plus, X } from 'lucide-react';
+import { Plus, X, FolderOpen, Network, Radio } from 'lucide-react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { tauri } from '@/lib/tauri';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
+import { useUiStore } from '@/stores/ui-store';
 import type { ConnectionStatus, Tab } from '@/types';
 
 export function TabBar() {
   const { tabs, activeTabId, addTab, closeTab, setActiveTab } = useTabStore();
   const sessionByTab = useSshStore((s) => s.sessionByTab);
   const unbind = useSshStore((s) => s.unbind);
+  const setActivePanel = useUiStore((s) => s.setActivePanel);
+  const setSftpSessionId = useUiStore((s) => s.setSftpSessionId);
+  const setPortForwardSessionId = useUiStore((s) => s.setPortForwardSessionId);
+
+  const activeSessionId = activeTabId ? sessionByTab[activeTabId] : null;
 
   const handleClose = (id: string) => {
     const sessionId = sessionByTab[id];
@@ -20,6 +26,24 @@ export function TabBar() {
       unbind(id);
     }
     closeTab(id);
+  };
+
+  const handleOpenSftp = () => {
+    if (activeSessionId) {
+      setSftpSessionId(activeSessionId);
+      setActivePanel('sftp');
+    }
+  };
+
+  const handleOpenPortForward = () => {
+    if (activeSessionId) {
+      setPortForwardSessionId(activeSessionId);
+      setActivePanel('port-forward');
+    }
+  };
+
+  const handleOpenBroadcast = () => {
+    setActivePanel('broadcast');
   };
 
   return (
@@ -42,6 +66,47 @@ export function TabBar() {
           />
         ))}
       </div>
+
+      {activeSessionId && (
+        <div className="flex items-center gap-1 border-l border-border-subtle px-1">
+          <button
+            type="button"
+            onClick={handleOpenSftp}
+            aria-label="Open SFTP Browser"
+            title="SFTP Browser"
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded',
+              'text-fg-muted transition-colors hover:bg-bg-elevated hover:text-fg',
+            )}
+          >
+            <FolderOpen size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenPortForward}
+            aria-label="Port Forwarding"
+            title="Port Forwarding"
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded',
+              'text-fg-muted transition-colors hover:bg-bg-elevated hover:text-fg',
+            )}
+          >
+            <Network size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenBroadcast}
+            aria-label="Broadcast Mode"
+            title="Broadcast Mode"
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded',
+              'text-fg-muted transition-colors hover:bg-bg-elevated hover:text-fg',
+            )}
+          >
+            <Radio size={14} />
+          </button>
+        </div>
+      )}
 
       <button
         type="button"
