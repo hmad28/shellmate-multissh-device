@@ -1,4 +1,5 @@
 use crate::errors::{AppError, AppResult};
+use crate::ssh::handler::ClientHandler;
 use parking_lot::Mutex as PlMutex;
 use russh::client::Handle;
 use serde::{Deserialize, Serialize};

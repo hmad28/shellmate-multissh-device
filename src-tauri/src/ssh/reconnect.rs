@@ -21,6 +21,8 @@ impl ReconnectHandle {
 }
 
 pub fn spawn_reconnect(
+    app: tauri::AppHandle,
+    session_id: String,
     params: ConnectParams,
     known_hosts: Arc<KnownHostsManager>,
     on_success: impl Fn(client::Handle<ClientHandler>) + Send + 'static,
@@ -71,6 +73,8 @@ pub fn spawn_reconnect(
                 Arc::clone(&known_hosts),
                 params.hostname.clone(),
                 params.port,
+                app.clone(),
+                session_id.clone(),
             );
 
             match client::connect(

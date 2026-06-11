@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
-import { tauri } from '@/lib/tauri';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
 
@@ -17,8 +16,6 @@ interface QuickConnectProps {
  */
 export function QuickConnect({ onConnected }: QuickConnectProps) {
   const addTab = useTabStore((s) => s.addTab);
-  const updateTabStatus = useTabStore((s) => s.updateTabStatus);
-  const bind = useSshStore((s) => s.bind);
 
   const [hostname, setHostname] = useState('');
   const [port, setPort] = useState('22');
@@ -50,10 +47,9 @@ export function QuickConnect({ onConnected }: QuickConnectProps) {
 
     const label = `${username}@${hostname}`;
     const tabId = addTab({ label });
-    updateTabStatus(tabId, 'connecting');
 
     try {
-      const sessionId = await tauri.ssh.quickConnect({
+      await useSshStore.getState().connectQuick(tabId, {
         hostname: hostname.trim(),
         port: portNum,
         username: username.trim(),
@@ -67,7 +63,6 @@ export function QuickConnect({ onConnected }: QuickConnectProps) {
                 passphrase: passphrase.length > 0 ? passphrase : null,
               },
       });
-      bind(tabId, sessionId);
       // Clear sensitive fields immediately after submit succeeds
       setPassword('');
       setPrivateKey('');
@@ -75,7 +70,6 @@ export function QuickConnect({ onConnected }: QuickConnectProps) {
       onConnected?.();
     } catch (err) {
       setError(String(err));
-      updateTabStatus(tabId, 'disconnected');
     } finally {
       setSubmitting(false);
     }

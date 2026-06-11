@@ -1,11 +1,14 @@
-use crate::db::DbError;
+use crate::errors::{AppError, AppResult};
+use base64::Engine;
+use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KnownHost {
     pub id: String,
     pub hostname: String,
@@ -19,12 +22,15 @@ pub struct KnownHost {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HostKeyVerificationResult {
     pub verified: bool,
+    #[serde(rename = "isNewHost")]
     pub is_new: bool,
     pub stored_fingerprint: Option<String>,
     pub presented_fingerprint: String,
     pub stored_key_type: Option<String>,
+    #[serde(rename = "keyType")]
     pub presented_key_type: String,
     pub host_id: Option<String>,
 }
@@ -39,8 +45,8 @@ impl KnownHostsManager {
         Self { db }
     }
 
-    pub fn list(&self) -> Result<Vec<KnownHost>, DbError> {
-        let db = self.db.lock().map_err(|e| DbError::LockError(e.to_string()))?;
+    pub fn list(&self) -> AppResult<Vec<KnownHost>> {
+        let db = self.db.lock();
         let mut stmt = db.prepare(
             "SELECT id, hostname, port, key_type, fingerprint, public_key_blob, trusted, created_at, updated_at
              FROM known_hosts
@@ -74,8 +80,8 @@ impl KnownHostsManager {
         port: u16,
         key_type: &str,
         public_key_blob: &[u8],
-    ) -> Result<HostKeyVerificationResult, DbError> {
-        let db = self.db.lock().map_err(|e| DbError::LockError(e.to_string()))?;
+    ) -> AppResult<HostKeyVerificationResult> {
+        let db = self.db.lock();
 
         // Calculate fingerprint of presented key
         let presented_fingerprint = calculate_fingerprint(public_key_blob);
@@ -121,7 +127,7 @@ impl KnownHostsManager {
                     host_id: None,
                 })
             }
-            Err(e) => Err(DbError::from(e)),
+            Err(e) => Err(AppError::Database(e)),
         }
     }
 
@@ -131,8 +137,8 @@ impl KnownHostsManager {
         port: u16,
         key_type: &str,
         public_key_blob: &[u8],
-    ) -> Result<String, DbError> {
-        let db = self.db.lock().map_err(|e| DbError::LockError(e.to_string()))?;
+    ) -> AppResult<String> {
+        let db = self.db.lock();
         let fingerprint = calculate_fingerprint(public_key_blob);
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
@@ -156,8 +162,8 @@ impl KnownHostsManager {
         Ok(id)
     }
 
-    pub fn update_trust(&self, id: &str, trusted: bool) -> Result<(), DbError> {
-        let db = self.db.lock().map_err(|e| DbError::LockError(e.to_string()))?;
+    pub fn update_trust(&self, id: &str, trusted: bool) -> AppResult<()> {
+        let db = self.db.lock();
         let now = chrono::Utc::now().to_rfc3339();
 
         db.execute(
@@ -168,8 +174,8 @@ impl KnownHostsManager {
         Ok(())
     }
 
-    pub fn remove(&self, id: &str) -> Result<(), DbError> {
-        let db = self.db.lock().map_err(|e| DbError::LockError(e.to_string()))?;
+    pub fn remove(&self, id: &str) -> AppResult<()> {
+        let db = self.db.lock();
         db.execute("DELETE FROM known_hosts WHERE id = ?1", params![id])?;
         Ok(())
     }

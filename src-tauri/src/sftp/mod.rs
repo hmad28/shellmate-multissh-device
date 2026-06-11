@@ -1,4 +1,5 @@
 use crate::errors::{AppError, AppResult};
+use crate::known_hosts::KnownHostsManager;
 use crate::ssh::handler::ClientHandler;
 use crate::ssh::session::{AuthMaterial, ConnectParams};
 use parking_lot::Mutex as PlMutex;
@@ -42,7 +43,7 @@ pub struct SftpSessionWrapper {
 }
 
 pub struct SftpManager {
-    sessions: PlMutex<HashMap<String, SftpSessionWrapper>>,
+    sessions: PlMutex<HashMap<String, Arc<tokio::sync::Mutex<SftpSessionWrapper>>>>,
     ssh_params: PlMutex<HashMap<String, ConnectParams>>,
 }
 
@@ -63,6 +64,7 @@ impl SftpManager {
     pub async fn open_sftp(
         &self,
         app: AppHandle,
+        known_hosts: Arc<KnownHostsManager>,
         session_id: String,
     ) -> AppResult<String> {
         let params = {
@@ -77,7 +79,13 @@ impl SftpManager {
         let mut handle = client::connect(
             Arc::new(config),
             (params.hostname.as_str(), params.port),
-            ClientHandler,
+            ClientHandler::new(
+                known_hosts,
+                params.hostname.clone(),
+                params.port,
+                app.clone(),
+                session_id.clone(),
+            ),
         )
         .await
         .map_err(|e| AppError::Internal(format!("SFTP SSH connect failed: {}", e)))?;
@@ -125,20 +133,25 @@ impl SftpManager {
         let sftp_id = Uuid::new_v4().to_string();
         self.sessions.lock().insert(
             sftp_id.clone(),
-            SftpSessionWrapper {
+            Arc::new(tokio::sync::Mutex::new(SftpSessionWrapper {
                 sftp,
                 cwd: ".".to_string(),
-            },
+            })),
         );
 
         Ok(sftp_id)
     }
 
     pub async fn list_directory(&self, sftp_id: &str, path: Option<String>) -> AppResult<Vec<SftpFile>> {
-        let mut sessions = self.sessions.lock();
-        let wrapper = sessions
-            .get_mut(sftp_id)
-            .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?;
+        let wrapper_arc = {
+            let sessions = self.sessions.lock();
+            sessions
+                .get(sftp_id)
+                .cloned()
+                .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?
+        };
+
+        let mut wrapper = wrapper_arc.lock().await;
 
         let target_path = path.unwrap_or_else(|| wrapper.cwd.clone());
         
@@ -150,10 +163,7 @@ impl SftpManager {
 
         let mut files = Vec::new();
         for entry in entries {
-            let name = entry
-                .filename()
-                .to_string_lossy()
-                .into_owned();
+            let name = entry.file_name();
             
             if name == "." || name == ".." {
                 continue;
@@ -162,9 +172,9 @@ impl SftpManager {
             let metadata = entry.metadata();
             let is_dir = metadata.is_dir();
             let is_symlink = metadata.is_symlink();
-            let size = metadata.size();
-            let permissions = metadata.permissions().unwrap_or(0);
-            let modified = metadata.mtime();
+            let size = metadata.len();
+            let permissions = metadata.permissions.unwrap_or(0);
+            let modified = metadata.mtime.unwrap_or(0) as i64;
 
             files.push(SftpFile {
                 name,
@@ -214,10 +224,15 @@ impl SftpManager {
             .map_err(|e| AppError::Internal(format!("Failed to read local file metadata: {}", e)))?
             .len();
 
-        let sessions = self.sessions.lock();
-        let wrapper = sessions
-            .get(sftp_id)
-            .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?;
+        let wrapper_arc = {
+            let sessions = self.sessions.lock();
+            sessions
+                .get(sftp_id)
+                .cloned()
+                .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?
+        };
+
+        let mut wrapper = wrapper_arc.lock().await;
 
         let mut remote_file = wrapper
             .sftp
@@ -287,10 +302,15 @@ impl SftpManager {
             .unwrap_or("unknown")
             .to_string();
 
-        let sessions = self.sessions.lock();
-        let wrapper = sessions
-            .get(sftp_id)
-            .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?;
+        let wrapper_arc = {
+            let sessions = self.sessions.lock();
+            sessions
+                .get(sftp_id)
+                .cloned()
+                .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?
+        };
+
+        let mut wrapper = wrapper_arc.lock().await;
 
         let mut remote_file = wrapper
             .sftp
@@ -304,7 +324,7 @@ impl SftpManager {
             .await
             .map_err(|e| AppError::Internal(format!("SFTP metadata failed: {}", e)))?;
 
-        let total_bytes = metadata.size();
+        let total_bytes = metadata.len();
 
         let mut local_file = TokioFile::create(&local_path)
             .await
@@ -359,10 +379,15 @@ impl SftpManager {
     }
 
     pub async fn rename(&self, sftp_id: &str, old_path: String, new_path: String) -> AppResult<()> {
-        let sessions = self.sessions.lock();
-        let wrapper = sessions
-            .get(sftp_id)
-            .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?;
+        let wrapper_arc = {
+            let sessions = self.sessions.lock();
+            sessions
+                .get(sftp_id)
+                .cloned()
+                .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?
+        };
+
+        let wrapper = wrapper_arc.lock().await;
 
         wrapper
             .sftp
@@ -374,10 +399,15 @@ impl SftpManager {
     }
 
     pub async fn remove(&self, sftp_id: &str, path: String) -> AppResult<()> {
-        let sessions = self.sessions.lock();
-        let wrapper = sessions
-            .get(sftp_id)
-            .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?;
+        let wrapper_arc = {
+            let sessions = self.sessions.lock();
+            sessions
+                .get(sftp_id)
+                .cloned()
+                .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?
+        };
+
+        let wrapper = wrapper_arc.lock().await;
 
         let metadata = wrapper
             .sftp
@@ -403,14 +433,19 @@ impl SftpManager {
     }
 
     pub async fn mkdir(&self, sftp_id: &str, path: String) -> AppResult<()> {
-        let sessions = self.sessions.lock();
-        let wrapper = sessions
-            .get(sftp_id)
-            .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?;
+        let wrapper_arc = {
+            let sessions = self.sessions.lock();
+            sessions
+                .get(sftp_id)
+                .cloned()
+                .ok_or_else(|| AppError::NotFound(format!("SFTP session {}", sftp_id)))?
+        };
+
+        let wrapper = wrapper_arc.lock().await;
 
         wrapper
             .sftp
-            .create_dir(&path, 0o755)
+            .create_dir(&path)
             .await
             .map_err(|e| AppError::Internal(format!("SFTP mkdir failed: {}", e)))?;
 

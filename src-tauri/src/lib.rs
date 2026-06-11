@@ -1,7 +1,6 @@
 // Prevents additional console window on Windows in release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod broadcast;
 mod commands;
 mod crypto;
 mod db;
@@ -101,6 +100,12 @@ pub fn run() {
             commands::known_hosts::known_hosts_list,
             commands::known_hosts::known_hosts_remove,
             commands::known_hosts::known_hosts_set_trusted,
+            // Broadcast
+            commands::broadcast::broadcast_add,
+            commands::broadcast::broadcast_remove,
+            commands::broadcast::broadcast_is_active,
+            commands::broadcast::broadcast_get_sessions,
+            commands::broadcast::broadcast_send,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

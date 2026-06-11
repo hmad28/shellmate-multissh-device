@@ -18,8 +18,6 @@ export function HostItem({ host, onEdit }: HostItemProps) {
   const groups = useHostStore((s) => s.groups);
   const deleteHost = useHostStore((s) => s.deleteHost);
   const addTab = useTabStore((s) => s.addTab);
-  const updateTabStatus = useTabStore((s) => s.updateTabStatus);
-  const bind = useSshStore((s) => s.bind);
 
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -34,13 +32,10 @@ export function HostItem({ host, onEdit }: HostItemProps) {
     if (connecting) return;
     setConnecting(true);
     const tabId = addTab({ label: host.label });
-    updateTabStatus(tabId, 'connecting');
     try {
-      const sessionId = await tauri.ssh.connect({ hostId: host.id });
-      bind(tabId, sessionId);
+      await useSshStore.getState().connectSaved(tabId, host.id);
     } catch (err) {
       console.error('SSH connect failed', err);
-      updateTabStatus(tabId, 'disconnected');
     } finally {
       setConnecting(false);
     }

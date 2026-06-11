@@ -5,7 +5,10 @@
       "Bash(git commit *)",
       "Bash(git branch *)",
       "Bash(git remote *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(findstr /v \"^.agent ^.agents ^.claude ^.commandcode ^.kiro ^_bmad ^.opencode\")",
+      "Bash(Select-String -NotMatch \"^\\\\.agent|^\\\\.agents|^\\\\.claude|^\\\\.commandcode|^\\\\.kiro|^_bmad|^\\\\.opencode\")",
+      "PowerShell(git ls-files --others --exclude-standard | Where-Object { $_ -notmatch '^\\(\\\\.agent|\\\\.agents|\\\\.claude|\\\\.commandcode|\\\\.kiro|_bmad|\\\\.opencode\\)' })"
     ]
   }
 }

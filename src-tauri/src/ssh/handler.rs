@@ -2,6 +2,7 @@ use crate::known_hosts::KnownHostsManager;
 use async_trait::async_trait;
 use russh::client;
 use russh::keys::key::PublicKey;
+use russh_keys::PublicKeyBase64;
 use std::sync::Arc;
 use tauri::Emitter;
 
@@ -85,6 +86,9 @@ impl client::Handler for ClientHandler {
                             "port": self.port,
                             "keyType": key_type,
                             "fingerprint": verification.presented_fingerprint,
+                            "publicKey": public_key_blob,
+                            "isNewHost": verification.is_new,
+                            "storedFingerprint": verification.stored_fingerprint,
                         }),
                     );
                     

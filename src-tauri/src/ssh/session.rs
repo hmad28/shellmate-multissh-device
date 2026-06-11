@@ -1,6 +1,7 @@
 use crate::errors::{AppError, AppResult};
 use crate::known_hosts::KnownHostsManager;
 use crate::ssh::handler::ClientHandler;
+use crate::state::AppState;
 use parking_lot::Mutex as PlMutex;
 use russh::client;
 use russh::keys::decode_secret_key;
@@ -129,15 +130,25 @@ impl SessionManager {
                 None,
             );
 
-            if let Err(e) = run_session(
+            let res = run_session(
                 app_for_task.clone(),
                 session_id_for_task.clone(),
                 params,
                 rx,
                 Arc::clone(&mgr.known_hosts),
             )
-            .await
+            .await;
+
+            // Cleanup registered session handles
             {
+                use tauri::Manager;
+                if let Some(state) = app_for_task.try_state::<AppState>() {
+                    state.sftp.cleanup_ssh_session(&session_id_for_task);
+                    state.port_forward.cleanup_session(&session_id_for_task);
+                }
+            }
+
+            if let Err(e) = res {
                 log::warn!("ssh session {session_id_for_task} ended with error: {e}");
                 emit_status(
                     &app_for_task,
@@ -203,12 +214,6 @@ impl SessionManager {
     }
 }
 
-impl Default for SessionManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Owns the russh client + channel. Drives I/O until disconnect.
 async fn run_session(
     app: AppHandle,
@@ -240,10 +245,10 @@ async fn run_session(
     .await
     .map_err(|e| AppError::Internal(format!("ssh connect failed: {e}")))?;
 
-    let auth_ok = match params.auth {
+    let auth_ok = match &params.auth {
         AuthMaterial::Password { password } => {
             handle
-                .authenticate_password(&params.username, password)
+                .authenticate_password(&params.username, password.clone())
                 .await
                 .map_err(|e| AppError::Internal(format!("ssh auth error: {e}")))?
         }
@@ -251,7 +256,7 @@ async fn run_session(
             private_key,
             passphrase,
         } => {
-            let key = decode_secret_key(&private_key, passphrase.as_deref())
+            let key = decode_secret_key(private_key, passphrase.as_deref())
                 .map_err(|e| AppError::InvalidInput(format!("invalid private key: {e}")))?;
             handle
                 .authenticate_publickey(&params.username, Arc::new(key))
@@ -281,6 +286,16 @@ async fn run_session(
         .request_shell(false)
         .await
         .map_err(|e| AppError::Internal(format!("request shell failed: {e}")))?;
+
+    let handle = Arc::new(handle);
+
+    // Register parameters for SFTP and Port Forwarding
+    {
+        use tauri::Manager;
+        let state = app.state::<AppState>();
+        state.sftp.register_ssh_session(&session_id, params.clone());
+        state.port_forward.register_ssh_handle(&session_id, Arc::clone(&handle));
+    }
 
     emit_status(&app, &session_id, SessionStatus::Connected, None);
 

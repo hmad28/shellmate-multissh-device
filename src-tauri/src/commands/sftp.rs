@@ -63,7 +63,7 @@ pub async fn sftp_open(
     input: SftpOpenInput,
 ) -> AppResult<String> {
     let mgr = Arc::clone(&state.sftp);
-    mgr.open_sftp(app, input.session_id).await
+    mgr.open_sftp(app, Arc::clone(&state.known_hosts), input.session_id).await
 }
 
 #[tauri::command]
