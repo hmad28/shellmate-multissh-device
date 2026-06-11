@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Phase 1–6 Integration & Compile-Time Fixes (2026-06-11)
+
+**Backend** (`src-tauri/`):
+- Upgraded `russh-sftp` dependency version from `"0.4"` to `"2.1.2"` to resolve crates.io version mismatch.
+- Refactored `sftp/mod.rs` to store `Arc<tokio::sync::Mutex<SftpSessionWrapper>>` to avoid holding synchronous parking_lot Mutex guards across async `.await` boundaries.
+- Wired SSH connection parameter and active handle registration upon successful client authentication in `SessionManager::open`.
+- Removed invalid top-level `mod broadcast;` from `lib.rs` and registered missing broadcast Tauri commands.
+- Added `#[serde(rename_all = "camelCase")]` and explicit serde renames for TOFU host-key verification struct responses to align with frontend Tauri commands.
+- Added `sha2` crate dependency for cryptographic fingerprint hashing.
+
+**Frontend** (`src/`):
+- Registered global event listener for `"ssh:host-key-verification"` in `AppLayout.tsx` to display `HostKeyVerificationDialog` properly during TOFU connection handshakes.
+- Refactored connection attempt management and retries within `ssh-store.ts`.
+
 ### Added — Phase 6: Network Hardening (2026-06-10)
 
 **Backend** (`src-tauri/`):

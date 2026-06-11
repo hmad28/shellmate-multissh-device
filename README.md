@@ -83,6 +83,20 @@ ShellMate is built for developers, DevOps, and sysadmins who need:
 - **Auto-Lock**: Frontend polls `vault_check_idle` every 15s, throttled activity ping every 60s on user input.
 - **Master Password Change**: Atomic re-encryption of all credentials in a single transaction with old/new key zeroize on every error path.
 
+#### Phase 5: File Transfer & Network ✅
+- **SFTP Browser**: Directory listing, navigation, upload/download with real-time progress events for transfers, rename, delete, mkdir. Multiple SFTP panels per connection are supported.
+- **Port Forwarding**: Local (-L) and remote (-R) rules per host with conflict detection (binding errors handled gracefully). Toggles enable/disable on the fly.
+
+#### Phase 6: Network Hardening ✅
+- **Known Hosts (TOFU)**: Trust-on-first-use host verification with mismatch warning dialogs comparing fingerprints.
+- **Auto-Reconnect**: Exponential backoff reconnection loop with manual cancel options and status notifications in the tab area.
+- **Broadcast Mode**: Keystroke broadcasting to multiple SSH sessions concurrently with visual group indicators.
+
+#### Phase 1–6 Integration & Stabilization ✅
+- Fixed critical compilation errors by upgrading `russh-sftp` to `2.1.2`, removing invalid imports, correcting struct references, and resolving memory safety issues where Mutex guards were held across `.await` points.
+- Wired host key verification handshakes in the React layout to trigger the TOFU verification dialog.
+- Standardized serializable payload structures between Tauri backend commands and frontend state.
+
 ### Roadmap (Phase 5 → 14)
 
 ShellMate is delivered scope-driven (no fixed timeline). Each phase ships when acceptance criteria are met.

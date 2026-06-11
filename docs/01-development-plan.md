@@ -1,8 +1,8 @@
 # Development Plan
 ## ShellMate — SSH Client (Production v1.0)
 
-**Version:** 2.2
-**Last Updated:** 2026-06-10
+**Version:** 2.3
+**Last Updated:** 2026-06-11
 **Approach:** Scope-driven phases, no fixed timeline — each phase ships when acceptance criteria are met.
 
 ---
@@ -478,7 +478,21 @@
 - ✅ Frontend types, stores, and components created
 - ✅ UI integration complete (TabBar broadcast button, ContentArea broadcast panel)
 - ✅ CHANGELOG.md updated with Phase 6 entry
-- ✅ development-plan.md updated with Phase 6 completion
+- ✅ codebase_review_report.md addressed and resolved
+- ✅ development-plan.md updated with Phase 6 completion and integration stabilization details
+
+### Phase 1–6 Integration & Stabilization (2026-06-11)
+
+Following the audit in [codebase_review_report.md](file:///C:/Projects/shellmate/docs/codebase_review_report.md), several critical compilation and integration gaps were identified and resolved to stabilize the codebase:
+
+- **Dependency Mismatch Resolved**: Upgraded `russh-sftp` dependency to `"2.1.2"` and added `sha2` crate for fingerprint computation.
+- **Async Thread Safety**: Refactored `sftp/mod.rs` to store `Arc<tokio::sync::Mutex<SftpSessionWrapper>>` instead of holding synchronous `parking_lot` lock guards across `.await` yield points, preventing runtime deadlocks and compiler thread-safety violations.
+- **Connection Handle Sharing**: Wrapped `russh::client::Handle` in an `Arc` after successful connection authentication so it can be shared with background managers (`PortForwardManager`, `SftpManager`) without violating non-Clonable restrictions of the handle.
+- **Tauri Event / Serialization Plumbing**:
+  - Registered missing `broadcast` commands.
+  - Aligned casing between Rust and TypeScript for host key verification payloads (using `#[serde(rename_all = "camelCase")]` and explicit field renames like `isNewHost` and `keyType`).
+  - Registered frontend listeners in `AppLayout.tsx` to handle the `ssh:host-key-verification` events and prompt the user via `HostKeyVerificationDialog`.
+- **Known Hosts Verification**: Standardized the public key structure returned during TOFU handshake to ensure it can be safely serialized and de-serialized on the frontend.
 
 ---
 

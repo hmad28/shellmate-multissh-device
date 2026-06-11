@@ -1,8 +1,8 @@
 # ShellMate Documentation Index
 
 **Version:** 2.0
-**Last Updated:** 2026-06-10
-**Status:** In development (Phase 1-2 complete, scope expanded to full v1.0 production)
+**Last Updated:** 2026-06-11
+**Status:** In development (Phase 1-6 complete, scope expanded to full v1.0 production)
 
 ---
 
@@ -82,8 +82,9 @@ ShellMate v1.0 is a **production release**, not an MVP. Scope spans 14 phases de
 | 2 | Complete (2026-06-10) | Core SSH + Vault + Terminal |
 | 3 | Complete (2026-06-10) | Host Management & Persistence |
 | 4 | Complete (2026-06-10) | Productivity & Settings (snippets, themes, settings, auto-lock, password change) |
-| 5 | Pending | File Transfer & Network (SFTP, port forward) |
-| 6 | Pending | Network Hardening (known hosts, Mosh, broadcast) |
+| 5 | Complete (2026-06-10) | File Transfer & Network (SFTP, port forward) |
+| 6 | Complete (2026-06-10) | Network Hardening (known hosts, Mosh, broadcast) |
+| - | Complete (2026-06-11) | Phase 1–6 Integration & Stabilization |
 | 7 | Pending | Full-DB Encryption (SQLCipher) |
 | 8 | Pending | Biometric Unlock |
 | 9 | Pending | Multi-Device Sync (E2E) |
