@@ -12,7 +12,10 @@ mod ssh;
 mod state;
 mod vault;
 
+use crate::commands::p2p_sync::SyncServerState;
+use crate::commands::vip_access::VipKeyStore;
 use crate::state::AppState;
+use std::sync::Arc;
 use tauri::Manager;
 
 /// Tauri application entry point. Exposed as a library for cross-platform
@@ -34,6 +37,9 @@ pub fn run() {
             let conn = db::open(&db_path).expect("failed to initialize database");
 
             app.manage(AppState::new(conn));
+            app.manage(Arc::new(VipKeyStore::new()));
+            app.manage(Arc::new(SyncServerState::new()));
+            commands::discovery::init(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -106,6 +112,20 @@ pub fn run() {
             commands::broadcast::broadcast_is_active,
             commands::broadcast::broadcast_get_sessions,
             commands::broadcast::broadcast_send,
+            // Discovery
+            commands::discovery::start_discovery,
+            commands::discovery::stop_discovery,
+            commands::discovery::start_broadcasting,
+            // VIP Access
+            commands::vip_access::vip_generate_keypair,
+            commands::vip_access::vip_inject_authorized_keys,
+            commands::vip_access::vip_create_localhost_host,
+            commands::vip_access::vip_get_key_status,
+            // P2P Sync
+            commands::p2p_sync::p2p_start_sync_server,
+            commands::p2p_sync::p2p_stop_sync_server,
+            commands::p2p_sync::p2p_get_sync_status,
+            commands::p2p_sync::p2p_export_for_sync,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -223,7 +223,7 @@ async fn run_session(
     known_hosts: Arc<KnownHostsManager>,
 ) -> AppResult<()> {
     let config = client::Config {
-        inactivity_timeout: Some(Duration::from_secs(0)), // disabled; we use keepalive instead
+        inactivity_timeout: None, // disabled; we use keepalive instead
         keepalive_interval: Some(Duration::from_secs(60)),
         keepalive_max: 3,
         ..Default::default()

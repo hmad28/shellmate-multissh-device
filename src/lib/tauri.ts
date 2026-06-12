@@ -134,8 +134,7 @@ export const tauri = {
       invoke<void>('known_hosts_set_trusted', { id, trusted }),
   },
   broadcast: {
-    add: (sessionId: string) =>
-      invoke<void>('broadcast_add', { sessionId }),
+    add: (sessionId: string) => invoke<void>('broadcast_add', { sessionId }),
     remove: (sessionId: string) =>
       invoke<void>('broadcast_remove', { sessionId }),
     isActive: (sessionId: string) =>
@@ -143,6 +142,30 @@ export const tauri = {
     getSessions: () => invoke<string[]>('broadcast_get_sessions'),
     send: (sessionId: string, data: string) =>
       invoke<void>('broadcast_send', { sessionId, data }),
+  },
+  discovery: {
+    start: () => invoke<void>('start_discovery'),
+    stop: () => invoke<void>('stop_discovery'),
+    startBroadcasting: (serviceName: string, port: number) =>
+      invoke<void>('start_broadcasting', { serviceName, port }),
+  },
+  vipAccess: {
+    generateKeypair: () => invoke<string>('vip_generate_keypair'),
+    injectAuthorizedKeys: (pubkeyHex: string) =>
+      invoke<string>('vip_inject_authorized_keys', { pubkeyHex }),
+    createLocalhostHost: (credentialId: string, label?: string) =>
+      invoke<string>('vip_create_localhost_host', { credentialId, label }),
+    getKeyStatus: () =>
+      invoke<{ hostExists: boolean; authorizedKeysInjected: boolean }>(
+        'vip_get_key_status',
+      ),
+  },
+  p2p: {
+    startSyncServer: () => invoke<string>('p2p_start_sync_server'),
+    stopSyncServer: () => invoke<void>('p2p_stop_sync_server'),
+    getSyncStatus: () =>
+      invoke<{ isRunning: boolean; hasPin: boolean }>('p2p_get_sync_status'),
+    exportForSync: () => invoke<string>('p2p_export_for_sync'),
   },
   app: {
     version: () => invoke<string>('app_version'),

@@ -6,6 +6,7 @@ import { tauri } from '@/lib/tauri';
 import { useHostStore } from '@/stores/host-store';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
+import { useDragStore } from '@/stores/drag-store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Host } from '@/types';
 
@@ -64,9 +65,35 @@ export function HostItem({ host, onEdit }: HostItemProps) {
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
-  const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData('application/x-shellmate-host', host.id);
-    e.dataTransfer.effectAllowed = 'move';
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Left click only
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      if (Math.sqrt(deltaX * deltaX + deltaY * deltaY) > 5) {
+        useDragStore
+          .getState()
+          .startDrag(
+            'host',
+            host.id,
+            host.label,
+            moveEvent.clientX,
+            moveEvent.clientY,
+          );
+        window.removeEventListener('mousemove', handleMouseMove);
+      }
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   };
 
   return (
@@ -74,8 +101,7 @@ export function HostItem({ host, onEdit }: HostItemProps) {
       <div
         role="button"
         tabIndex={0}
-        draggable
-        onDragStart={handleDragStart}
+        onMouseDown={handleMouseDown}
         onDoubleClick={handleConnect}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {

@@ -9,8 +9,13 @@ interface PortForwardPanelProps {
 }
 
 export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
-  const { forwards, loadForwards, createForward, removeForward, toggleForward } =
-    usePortForwardStore();
+  const {
+    forwards,
+    loadForwards,
+    createForward,
+    removeForward,
+    toggleForward,
+  } = usePortForwardStore();
 
   const [showForm, setShowForm] = useState(false);
   const [ruleType, setRuleType] = useState<PortForwardType>('local');
@@ -44,7 +49,13 @@ export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
     }
 
     try {
-      await createForward(sessionId, ruleType, local, remoteHost.trim(), remote);
+      await createForward(
+        sessionId,
+        ruleType,
+        local,
+        remoteHost.trim(),
+        remote,
+      );
       setShowForm(false);
       setLocalPort('');
       setRemoteHost('localhost');
@@ -78,7 +89,7 @@ export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
       </div>
 
       {showForm && (
-        <div className="flex flex-col gap-3 p-4 border rounded-lg bg-muted/30">
+        <div className="bg-muted/30 flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2">
               <input
@@ -104,7 +115,7 @@ export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
 
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
+              <label className="text-muted-foreground mb-1 block text-xs">
                 Local Port
               </label>
               <Input
@@ -115,7 +126,7 @@ export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
               />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
+              <label className="text-muted-foreground mb-1 block text-xs">
                 Remote Host
               </label>
               <Input
@@ -126,7 +137,7 @@ export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
               />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
+              <label className="text-muted-foreground mb-1 block text-xs">
                 Remote Port
               </label>
               <Input
@@ -138,7 +149,7 @@ export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
             </div>
           </div>
 
-          {error && <div className="text-xs text-destructive">{error}</div>}
+          {error && <div className="text-destructive text-xs">{error}</div>}
 
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={handleCreate}>
@@ -156,7 +167,7 @@ export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
       )}
 
       {sessionForwards.length === 0 ? (
-        <div className="text-sm text-muted-foreground text-center py-8">
+        <div className="text-muted-foreground py-8 text-center text-sm">
           No port forwards configured
         </div>
       ) : (
@@ -164,7 +175,7 @@ export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
           {sessionForwards.map((forward) => (
             <div
               key={forward.id}
-              className="flex items-center justify-between p-3 border rounded-lg"
+              className="flex items-center justify-between rounded-lg border p-3"
             >
               <div className="flex items-center gap-3">
                 <input
@@ -177,7 +188,7 @@ export function PortForwardPanel({ sessionId }: PortForwardPanelProps) {
                   <div className="text-sm font-medium">
                     {forward.ruleType === 'local' ? 'Local' : 'Remote'} Forward
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-muted-foreground text-xs">
                     {forward.ruleType === 'local'
                       ? `localhost:${forward.localPort} → ${forward.remoteHost}:${forward.remotePort}`
                       : `${forward.remoteHost}:${forward.remotePort} → localhost:${forward.localPort}`}

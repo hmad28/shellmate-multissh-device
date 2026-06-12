@@ -17,9 +17,9 @@ export default defineConfig({
   // Vite options tailored for Tauri development
   clearScreen: false,
   server: {
-    port: 1420,
+    port: 1430,
     strictPort: true,
-    host: host || false,
+    host: '0.0.0.0',
     hmr: host
       ? {
           protocol: 'ws',

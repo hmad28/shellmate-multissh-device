@@ -250,4 +250,22 @@ export const strings = {
     cancelled: 'Reconnection cancelled',
     cancel: 'Cancel',
   },
+  vipAccess: {
+    title: 'VIP Passwordless Access',
+    description:
+      'Configure passwordless SSH access from your mobile device to this desktop.',
+    checkStatus: 'Check Status',
+    authKeys: 'authorized_keys',
+    localhostHost: 'VIP Host',
+    configure: 'Configure VIP Access',
+  },
+  p2pSync: {
+    title: 'P2P Local Sync',
+    description:
+      'Sync your hosts, credentials, and snippets to your mobile device over the local network.',
+    startServer: 'Start Sync Server',
+    stopServer: 'Stop Server',
+    enterPinOnMobile: 'Enter this PIN on your mobile device:',
+    scanQrOrEnterPin: 'On mobile: tap "Sync Devices" and enter this PIN.',
+  },
 } as const;

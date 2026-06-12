@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { tauri } from '@/lib/tauri';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
+import { useUiStore } from '@/stores/ui-store';
 import { HostKeyVerificationDialog } from '@/components/security/HostKeyVerificationDialog';
 import { Sidebar } from './Sidebar';
 import { TabBar } from './TabBar';
@@ -22,7 +23,21 @@ interface PendingVerification {
 }
 
 export function AppLayout() {
-  const [pendingVerification, setPendingVerification] = useState<PendingVerification | null>(null);
+  const [pendingVerification, setPendingVerification] =
+    useState<PendingVerification | null>(null);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+
+  // Ctrl+B to toggle sidebar
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [toggleSidebar]);
 
   useEffect(() => {
     const unlisten = listen<any>('ssh:host-key-verification', (event) => {
@@ -73,7 +88,8 @@ export function AppLayout() {
 
   const handleReject = () => {
     if (!pendingVerification) return;
-    const attempt = useSshStore.getState().pendingAttempts[pendingVerification.sessionId];
+    const attempt =
+      useSshStore.getState().pendingAttempts[pendingVerification.sessionId];
     if (attempt) {
       useTabStore.getState().updateTabStatus(attempt.tabId, 'disconnected');
       useSshStore.getState().removeAttempt(pendingVerification.sessionId);
@@ -100,7 +116,9 @@ export function AppLayout() {
           result={{
             verified: false,
             isNewHost: pendingVerification.isNewHost,
-            ...(pendingVerification.storedFingerprint ? { storedFingerprint: pendingVerification.storedFingerprint } : {}),
+            ...(pendingVerification.storedFingerprint
+              ? { storedFingerprint: pendingVerification.storedFingerprint }
+              : {}),
             presentedFingerprint: pendingVerification.fingerprint,
             keyType: pendingVerification.keyType,
           }}

@@ -1,6 +1,6 @@
 # ShellMate Documentation Index
 
-**Version:** 2.0
+**Version:** 2.3
 **Last Updated:** 2026-06-11
 **Status:** In development (Phase 1-6 complete, scope expanded to full v1.0 production)
 
@@ -27,6 +27,8 @@ ShellMate v1.0 is a **production release**, not an MVP. Scope spans 14 phases de
 | 06 | [Architecture Plan](./06-architecture-plan.md) | System architecture, multi-platform, sync, plugins, audit, themes, broadcast |
 | 07 | [Security Plan](./07-security-plan.md) | Defense-in-depth encryption, biometric, sync security, plugin sandbox, team vault, audit |
 | 08 | [DevOps Plan](./08-devops-plan.md) | CI/CD, testing, code signing, mobile builds, plugin distribution, security audit |
+| — | [P2P Sync Architecture](./architecture.md) | P2P local sync design (mDNS discovery, PIN pairing, VIP passwordless access) — **Implemented (2026-06-10)** |
+| — | [Codebase Review Report](./codebase_review_report.md) | Phase 1–6 integration audit findings and resolutions |
 
 ---
 
@@ -83,7 +85,7 @@ ShellMate v1.0 is a **production release**, not an MVP. Scope spans 14 phases de
 | 3 | Complete (2026-06-10) | Host Management & Persistence |
 | 4 | Complete (2026-06-10) | Productivity & Settings (snippets, themes, settings, auto-lock, password change) |
 | 5 | Complete (2026-06-10) | File Transfer & Network (SFTP, port forward) |
-| 6 | Complete (2026-06-10) | Network Hardening (known hosts, Mosh, broadcast) |
+| 6 | Complete (2026-06-10) | Network Hardening (known hosts, broadcast, auto-reconnect; Mosh deferred to Phase 14) |
 | - | Complete (2026-06-11) | Phase 1–6 Integration & Stabilization |
 | 7 | Pending | Full-DB Encryption (SQLCipher) |
 | 8 | Pending | Biometric Unlock |
@@ -118,7 +120,7 @@ ShellMate v1.0 is a **production release**, not an MVP. Scope spans 14 phases de
 | Styling | Tailwind CSS 3 + shadcn/ui |
 | Terminal | xterm.js |
 | SSH | russh (Rust) |
-| Mosh | Rust (Phase 6) |
+| Mosh | Rust (Phase 14) |
 | Local Storage | SQLite + SQLCipher (Phase 7) |
 | Encryption | AES-256-GCM + Argon2id |
 | Plugin Runtime | Wasmtime (WASM sandbox, Phase 12) |

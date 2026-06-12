@@ -1,8 +1,8 @@
 # DevOps Plan
 ## ShellMate — Development Operations (v1.0 Production)
 
-**Version:** 2.0
-**Last Updated:** 2026-06-10
+**Version:** 2.3
+**Last Updated:** 2026-06-11
 
 ---
 

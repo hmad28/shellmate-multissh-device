@@ -72,7 +72,11 @@ export const useSshStore = create<SshStore>((set, get) => ({
     try {
       const sessionId = await tauri.ssh.quickConnect(params);
       get().bind(tabId, sessionId);
-      get().registerAttempt(sessionId, { tabId, type: 'quick', quickParams: params });
+      get().registerAttempt(sessionId, {
+        tabId,
+        type: 'quick',
+        quickParams: params,
+      });
     } catch (err) {
       console.error('SSH connect failed', err);
       updateTabStatus(tabId, 'disconnected');

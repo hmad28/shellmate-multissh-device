@@ -1,8 +1,8 @@
 # Project Structure Plan
 ## ShellMate — SSH Client (v1.0 Production)
 
-**Version:** 2.0
-**Last Updated:** 2026-06-10
+**Version:** 2.3
+**Last Updated:** 2026-06-11
 
 ---
 
@@ -39,6 +39,15 @@ shellmate/
 │   │   │   ├── snippet.rs      # Snippet CRUD operations
 │   │   │   ├── sftp.rs         # SFTP file operations
 │   │   │   ├── port_forward.rs # Port forwarding management
+│   │   │   ├── credential.rs   # Credential management
+│   │   │   ├── group.rs        # Group management
+│   │   │   ├── system.rs       # System commands
+│   │   │   ├── theme.rs        # Theme management
+│   │   │   ├── known_hosts.rs  # SSH known hosts
+│   │   │   ├── broadcast.rs    # Broadcast mode
+│   │   │   ├── discovery.rs    # mDNS device discovery
+│   │   │   ├── vip_access.rs   # VIP passwordless SSH access
+│   │   │   ├── p2p_sync.rs     # P2P local sync engine
 │   │   │   └── settings.rs     # App settings management
 │   │   │
 │   │   ├── ssh/                # SSH implementation
@@ -111,6 +120,7 @@ shellmate/
 │   │   ├── layout/             # Layout components
 │   │   │   ├── AppLayout.tsx   # Main app layout
 │   │   │   ├── Sidebar.tsx     # Left sidebar
+│   │   │   ├── ContentArea.tsx # Main content area (panel routing)
 │   │   │   ├── TabBar.tsx      # Terminal tab bar
 │   │   │   ├── StatusBar.tsx   # Bottom status bar
 │   │   │   └── TitleBar.tsx    # Custom title bar
@@ -153,6 +163,12 @@ shellmate/
 │   │       ├── VaultSetup.tsx  # Initial vault setup
 │   │       └── VaultLock.tsx   # Lock screen
 │   │
+│   │   ├── vip/                # VIP Access components
+│   │   │   └── VipAccessPanel.tsx # VIP passwordless access config
+│   │   │
+│   │   └── sync/               # P2P Sync components
+│   │       └── P2pSyncPanel.tsx # P2P local sync UI
+│   │
 │   ├── stores/                 # Zustand stores
 │   │   ├── host-store.ts       # Host state management
 │   │   ├── tab-store.ts        # Tab state management
@@ -160,7 +176,10 @@ shellmate/
 │   │   ├── vault-store.ts      # Vault state
 │   │   ├── snippet-store.ts    # Snippet state
 │   │   ├── sftp-store.ts       # SFTP state
+│   │   ├── port-forward-store.ts # Port forwarding state
 │   │   ├── settings-store.ts   # Settings state
+│   │   ├── broadcast-store.ts  # Broadcast mode state
+│   │   ├── discovery-store.ts  # mDNS discovery state
 │   │   └── ui-store.ts         # UI state (sidebar, modals, etc.)
 │   │
 │   ├── hooks/                  # Custom React hooks
@@ -221,7 +240,6 @@ shellmate/
 ├── tsconfig.json               # TypeScript configuration
 ├── vite.config.ts              # Vite configuration
 ├── package.json                # Node.js dependencies
-├── bun.lockb                   # Bun lockfile
 ├── README.md                   # Project README
 ├── PRD.md                      # Product Requirements Document
 ├── CONTRIBUTING.md             # Contributing guidelines
@@ -289,13 +307,32 @@ src/
 ```
 src-tauri/src/
 ├── commands/        # API layer (Tauri commands)
-├── ssh/             # SSH implementation
+│   ├── host.rs      # Host CRUD
+│   ├── ssh.rs       # SSH connection management
+│   ├── vault.rs     # Vault operations
+│   ├── snippet.rs   # Snippet CRUD
+│   ├── sftp.rs      # SFTP operations
+│   ├── port_forward.rs # Port forwarding
+│   ├── credential.rs # Credential management
+│   ├── group.rs     # Group management
+│   ├── system.rs    # System commands
+│   ├── theme.rs     # Theme management
+│   ├── known_hosts.rs # SSH known hosts
+│   ├── broadcast.rs # Broadcast mode
+│   ├── discovery.rs # mDNS device discovery
+│   ├── vip_access.rs # VIP passwordless SSH access
+│   ├── p2p_sync.rs  # P2P local sync engine
+│   └── settings.rs  # App settings
+├── ssh/             # SSH implementation (russh)
 ├── sftp/            # SFTP implementation
-├── db/              # Database operations
-├── crypto/          # Encryption/decryption
-├── errors.rs        # Error handling
-├── state.rs         # App state
-└── utils.rs         # Utilities
+├── port_forward/    # SSH tunnel/port forwarding
+├── db/              # SQLite database operations
+├── crypto/          # AES-256-GCM + Argon2id encryption
+├── vault/           # Master password + vault state
+├── known_hosts/     # SSH host key verification
+├── errors.rs        # Error handling (thiserror)
+├── state.rs         # App state (AppState)
+└── lib.rs           # Library exports, Tauri setup
 ```
 
 ---

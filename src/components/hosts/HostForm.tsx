@@ -12,6 +12,8 @@ interface HostFormProps {
   onClose: () => void;
   /** When set, form is in edit mode. */
   host?: Host | null;
+  /** When set, populates the form but leaves it in create mode. */
+  initialData?: Partial<FormState> | undefined;
   /** Called after successful save. */
   onSaved?: (host: Host) => void;
 }
@@ -41,7 +43,13 @@ const emptyForm: FormState = {
   notes: '',
 };
 
-export function HostForm({ open, onClose, host, onSaved }: HostFormProps) {
+export function HostForm({
+  open,
+  onClose,
+  host,
+  initialData,
+  onSaved,
+}: HostFormProps) {
   const groups = useHostStore((s) => s.groups);
   const addHost = useHostStore((s) => s.addHost);
   const updateHost = useHostStore((s) => s.updateHost);
@@ -68,12 +76,14 @@ export function HostForm({ open, onClose, host, onSaved }: HostFormProps) {
         tags: host.tags.join(', '),
         notes: host.notes ?? '',
       });
+    } else if (initialData) {
+      setForm({ ...emptyForm, ...initialData });
     } else {
       setForm(emptyForm);
     }
     setErrors({});
     setSubmitError(null);
-  }, [open, host]);
+  }, [open, host, initialData]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((s) => ({ ...s, [key]: value }));

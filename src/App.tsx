@@ -1,9 +1,18 @@
 import { useEffect } from 'react';
 import { VaultGate } from '@/components/vault/VaultGate';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { DragGhost } from '@/components/layout/DragGhost';
 import { useAutoLock } from '@/hooks/useAutoLock';
+import { useCustomDragDrop } from '@/hooks/useCustomDragDrop';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useVaultStore } from '@/stores/vault-store';
+import { useTabStore } from '@/stores/tab-store';
+import { usePaneStore } from '@/stores/pane-store';
+import { useSshStore } from '@/stores/ssh-store';
+import { useSftpStore } from '@/stores/sftp-store';
+import { usePortForwardStore } from '@/stores/port-forward-store';
+import { useUiStore } from '@/stores/ui-store';
+import { tauri } from '@/lib/tauri';
 
 export default function App() {
   // Settings (theme, terminal prefs) are public — load on app start, before vault.
@@ -16,12 +25,42 @@ export default function App() {
   // Idle auto-lock poll runs whenever vault is unlocked.
   useAutoLock();
 
+  // Custom mouse-based drag and drop engine.
+  useCustomDragDrop();
+
+  // Reset all session/tab/pane state whenever the vault lock state changes.
+  const unlocked = useVaultStore((s) => s.unlocked);
+  useEffect(() => {
+    if (!unlocked) {
+      const sessionIds = Object.values(useSshStore.getState().sessionByTab);
+      for (const sid of sessionIds) {
+        void tauri.ssh.disconnect(sid).catch(() => {});
+      }
+    }
+
+    useTabStore.setState({ tabs: [], activeTabId: null });
+    usePaneStore.setState({
+      root: { type: 'leaf', id: 'pane-1', tabIds: [], activeTabId: null },
+      activePaneId: 'pane-1',
+      fullscreenPaneId: null,
+    });
+    useSshStore.setState({ sessionByTab: {}, pendingAttempts: {} });
+    useSftpStore.setState({ browsers: {}, activeBrowserId: null });
+    usePortForwardStore.setState({ forwards: {} });
+    useUiStore.setState({
+      activePanel: 'hosts',
+      sftpSessionId: null,
+      portForwardSessionId: null,
+      vaultUnlocked: unlocked,
+    });
+  }, [unlocked]);
+
   return (
-    <VaultGate>
-      <AppLayout />
-    </VaultGate>
+    <>
+      <VaultGate>
+        <AppLayout />
+      </VaultGate>
+      <DragGhost />
+    </>
   );
 }
-
-// Suppress unused import (referenced via hook implicitly when vault state reads)
-void useVaultStore;

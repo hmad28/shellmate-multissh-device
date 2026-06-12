@@ -122,9 +122,6 @@ export function Terminal({ tabId, sessionId }: TerminalProps) {
       onResizeDisposable.dispose();
       resizeObserver?.disconnect();
       term.dispose();
-      void tauri.ssh.disconnect(sessionId).catch(() => {
-        // session may already be closed by the backend
-      });
       termRef.current = null;
       fitRef.current = null;
     };

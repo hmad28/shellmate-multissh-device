@@ -26,9 +26,21 @@ interface SftpStore {
   openBrowser: (sessionId: string) => Promise<string>;
   closeBrowser: (sftpId: string) => Promise<void>;
   listDirectory: (sftpId: string, path?: string) => Promise<void>;
-  uploadFile: (sftpId: string, localPath: string, remotePath: string) => Promise<void>;
-  downloadFile: (sftpId: string, remotePath: string, localPath: string) => Promise<void>;
-  renameFile: (sftpId: string, oldPath: string, newPath: string) => Promise<void>;
+  uploadFile: (
+    sftpId: string,
+    localPath: string,
+    remotePath: string,
+  ) => Promise<void>;
+  downloadFile: (
+    sftpId: string,
+    remotePath: string,
+    localPath: string,
+  ) => Promise<void>;
+  renameFile: (
+    sftpId: string,
+    oldPath: string,
+    newPath: string,
+  ) => Promise<void>;
   removeFile: (sftpId: string, path: string) => Promise<void>;
   mkdir: (sftpId: string, path: string) => Promise<void>;
   setActiveBrowser: (sftpId: string | null) => void;
@@ -66,7 +78,8 @@ export const useSftpStore = create<SftpStore>((set, get) => ({
     set((state) => {
       const browsers = { ...state.browsers };
       delete browsers[sftpId];
-      const activeBrowserId = state.activeBrowserId === sftpId ? null : state.activeBrowserId;
+      const activeBrowserId =
+        state.activeBrowserId === sftpId ? null : state.activeBrowserId;
       return { browsers, activeBrowserId };
     });
   },
@@ -109,7 +122,10 @@ export const useSftpStore = create<SftpStore>((set, get) => ({
             [sftpId]: {
               ...browser,
               loading: false,
-              error: error instanceof Error ? error.message : 'Failed to list directory',
+              error:
+                error instanceof Error
+                  ? error.message
+                  : 'Failed to list directory',
             },
           },
         };
@@ -140,7 +156,8 @@ export const useSftpStore = create<SftpStore>((set, get) => ({
     try {
       await tauri.sftp.download({ sftpId, remotePath, localPath });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Download failed';
+      const message =
+        error instanceof Error ? error.message : 'Download failed';
       set((state) => {
         const browser = state.browsers[sftpId];
         if (!browser) return state;
@@ -197,7 +214,8 @@ export const useSftpStore = create<SftpStore>((set, get) => ({
       await tauri.sftp.mkdir({ sftpId, path });
       await get().listDirectory(sftpId);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create directory';
+      const message =
+        error instanceof Error ? error.message : 'Failed to create directory';
       set((state) => {
         const browser = state.browsers[sftpId];
         if (!browser) return state;
@@ -217,12 +235,12 @@ export const useSftpStore = create<SftpStore>((set, get) => ({
 
   updateTransfer: (transfer) => {
     set((state) => {
-      const browserId = Object.keys(state.browsers).find(id => {
+      const browserId = Object.keys(state.browsers).find((id) => {
         const browser = state.browsers[id];
-        return browser && browser.transfers.some(t => t.id === transfer.id);
+        return browser && browser.transfers.some((t) => t.id === transfer.id);
       });
       if (!browserId) return state;
-      
+
       const browser = state.browsers[browserId];
       if (!browser) return state;
 
@@ -231,8 +249,8 @@ export const useSftpStore = create<SftpStore>((set, get) => ({
           ...state.browsers,
           [browser.sftpId]: {
             ...browser,
-            transfers: browser.transfers.map(t => 
-              t.id === transfer.id ? transfer : t
+            transfers: browser.transfers.map((t) =>
+              t.id === transfer.id ? transfer : t,
             ),
           },
         },
@@ -248,7 +266,7 @@ export const useSftpStore = create<SftpStore>((set, get) => ({
         if (browser && browser.transfers) {
           browsers[sftpId] = {
             ...browser,
-            transfers: browser.transfers.filter(t => t.id !== transferId),
+            transfers: browser.transfers.filter((t) => t.id !== transferId),
           };
         }
       }

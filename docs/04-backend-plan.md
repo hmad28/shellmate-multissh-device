@@ -1,8 +1,8 @@
 # Backend Plan
 ## ShellMate — Rust + Tauri Backend (v1.0 Production)
 
-**Version:** 2.0
-**Last Updated:** 2026-06-10
+**Version:** 2.3
+**Last Updated:** 2026-06-11
 
 ---
 
@@ -29,39 +29,39 @@ src-tauri/src/
 ├── commands/            # Tauri command handlers
 │   ├── mod.rs
 │   ├── host.rs          # Host CRUD
-│   ├── ssh.rs           # SSH operations
-│   ├── vault.rs         # Vault operations
+│   ├── group.rs         # Group CRUD + move_host_to_group
+│   ├── ssh.rs           # SSH connect/disconnect/send/resize
+│   ├── vault.rs         # Vault setup/unlock/lock/check_idle/change_master_password
+│   ├── credential.rs    # Save/delete credentials (vault-gated)
 │   ├── snippet.rs       # Snippet CRUD
-│   ├── sftp.rs          # SFTP operations
-│   ├── port_forward.rs  # Port forwarding
-│   └── settings.rs      # Settings management
+│   ├── sftp.rs          # SFTP open/list/upload/download/rename/remove/mkdir/close
+│   ├── port_forward.rs  # Port forward create/list/remove/toggle
+│   ├── settings.rs      # Settings get/set
+│   ├── theme.rs         # Theme CRUD (builtin protection)
+│   ├── known_hosts.rs   # TOFU verify/trust/list/remove
+│   ├── broadcast.rs     # Broadcast add/remove/send
+│   ├── discovery.rs     # mDNS discovery + broadcasting
+│   └── system.rs        # app_version
 │
 ├── ssh/                 # SSH implementation
 │   ├── mod.rs
-│   ├── connection.rs    # Connection handler
-│   ├── session.rs       # Session management
-│   ├── auth.rs          # Authentication
-│   ├── channel.rs       # Channel management
-│   └── keepalive.rs     # Keepalive
+│   ├── handler.rs       # russh client handler (TOFU host key, auth)
+│   ├── session.rs       # Session management (1 conn per tab)
+│   ├── reconnect.rs     # Auto-reconnect with exponential backoff
+│   └── broadcast.rs     # Multi-tab keystroke broadcasting
 │
-├── sftp/                # SFTP implementation
-│   ├── mod.rs
-│   ├── client.rs        # SFTP client
-│   ├── operations.rs    # File operations
-│   └── permissions.rs   # Permissions
+├── sftp/                # SFTP implementation (russh-sftp)
+│   └── mod.rs
 │
-├── db/                  # Database layer
-│   ├── mod.rs
-│   ├── models.rs        # Data models
-│   ├── schema.rs        # Schema definition
-│   ├── migrations.rs    # Migration runner
-│   └── queries/         # Query modules
+├── db/                  # Database layer (SQLite)
+│   ├── mod.rs           # Schema, migrations, queries
+│   └── (inline query functions — no separate queries/ directory)
 │
 ├── crypto/              # Encryption
 │   ├── mod.rs
 │   ├── aes.rs           # AES-256-GCM
-│   ├── key_derivation.rs # Argon2id
-│   └── vault.rs         # Vault operations
+│   ├── kdf.rs           # Argon2id key derivation
+│   └── secure_buffer.rs # Zeroize-on-drop secret wrapper
 │
 ├── errors.rs            # Error types
 ├── state.rs             # App state
@@ -772,13 +772,16 @@ To prevent runaway resource usage:
 - Hard limit: configurable (default 50) — refuse new connection with clear error message
 - Per-session memory budget: ~2-5 MB for buffers and state
 
-### 9.6 SFTP Coexistence
+### 9.6 SFTP Strategy
 
-SFTP runs as a **separate channel on the same SSH connection of its parent terminal session**. This is allowed by SSH protocol and supported by russh. Specifically:
-- Opening SFTP from a terminal tab opens a new `subsystem("sftp")` channel on that tab's SSH connection
-- SFTP channel and shell channel are independent — closing SFTP doesn't close the shell
+SFTP runs as a **separate SSH connection** from the parent terminal session. This was chosen over multiplexing on the same connection for simplicity and isolation:
+
+- Opening SFTP from a terminal tab creates a fresh SSH connection with SFTP subsystem
+- SFTP and shell connections are independent — closing SFTP doesn't close the shell
 - If user opens SFTP without an active terminal, a new dedicated SSH connection is created
-- This is the **one place** where multi-channel is used in MVP — and it's narrow and well-tested
+- Multiple SFTP windows per session are supported by opening multiple SFTP connections
+
+**Rationale:** Multiplexing SFTP on the same SSH connection as the shell was considered but rejected — it adds lifecycle complexity (channel close ≠ connection close) and a shell disconnect would kill the SFTP browser. The resource cost of an extra SSH connection per SFTP window is acceptable.
 
 ### 9.7 Post-1.0 Evaluation
 

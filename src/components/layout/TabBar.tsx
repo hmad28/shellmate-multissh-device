@@ -1,14 +1,16 @@
-import { Plus, X, FolderOpen, Network, Radio } from 'lucide-react';
+import { X, FolderOpen, Network, Radio } from 'lucide-react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { tauri } from '@/lib/tauri';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
 import { useUiStore } from '@/stores/ui-store';
+import { useDragStore } from '@/stores/drag-store';
 import type { ConnectionStatus, Tab } from '@/types';
 
 export function TabBar() {
-  const { tabs, activeTabId, addTab, closeTab, setActiveTab } = useTabStore();
+  const { tabs, activeTabId, closeTab, setActiveTab } = useTabStore();
+
   const sessionByTab = useSshStore((s) => s.sessionByTab);
   const unbind = useSshStore((s) => s.unbind);
   const setActivePanel = useUiStore((s) => s.setActivePanel);
@@ -20,9 +22,7 @@ export function TabBar() {
   const handleClose = (id: string) => {
     const sessionId = sessionByTab[id];
     if (sessionId) {
-      void tauri.ssh.disconnect(sessionId).catch(() => {
-        // already closed; ignore
-      });
+      void tauri.ssh.disconnect(sessionId).catch(() => {});
       unbind(id);
     }
     closeTab(id);
@@ -50,6 +50,7 @@ export function TabBar() {
     <div
       role="tablist"
       aria-label="Terminal sessions"
+      data-drop-zone="tabbar"
       className={cn(
         'flex h-9 shrink-0 items-stretch',
         'border-b border-border bg-bg-sidebar',
@@ -107,18 +108,6 @@ export function TabBar() {
           </button>
         </div>
       )}
-
-      <button
-        type="button"
-        onClick={() => addTab()}
-        aria-label={strings.tabs.newTab}
-        className={cn(
-          'flex w-9 items-center justify-center border-l border-border-subtle',
-          'text-fg-muted transition-colors hover:bg-bg-elevated hover:text-fg',
-        )}
-      >
-        <Plus size={14} />
-      </button>
     </div>
   );
 }
@@ -134,11 +123,55 @@ function TabButton({
   onSelect: () => void;
   onClose: () => void;
 }) {
+  const dragId = useDragStore((s) => s.dragId);
+  const dragType = useDragStore((s) => s.dragType);
+  const hoveredZoneId = useDragStore((s) => s.hoveredZoneId);
+  const hoveredZoneType = useDragStore((s) => s.hoveredZoneType);
+
+  const isHovered =
+    hoveredZoneType === 'tab' &&
+    hoveredZoneId === tab.id &&
+    !(dragType === 'tab' && dragId === tab.id);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Left click only
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      if (Math.sqrt(deltaX * deltaX + deltaY * deltaY) > 5) {
+        useDragStore
+          .getState()
+          .startDrag(
+            'tab',
+            tab.id,
+            tab.label,
+            moveEvent.clientX,
+            moveEvent.clientY,
+          );
+        window.removeEventListener('mousemove', handleMouseMove);
+      }
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   return (
     <div
       role="tab"
       aria-selected={active}
       tabIndex={active ? 0 : -1}
+      data-drop-zone="tab"
+      data-tab-id={tab.id}
+      onMouseDown={handleMouseDown}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -152,6 +185,7 @@ function TabButton({
         active
           ? 'bg-bg text-fg'
           : 'text-fg-muted hover:bg-bg-elevated hover:text-fg',
+        isHovered && 'bg-accent/15 border-l border-l-accent font-medium',
       )}
     >
       <StatusDot status={tab.status} />

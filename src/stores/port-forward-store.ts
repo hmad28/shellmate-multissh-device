@@ -10,7 +10,7 @@ interface PortForwardStore {
     ruleType: PortForwardType,
     localPort: number,
     remoteHost: string,
-    remotePort: number
+    remotePort: number,
   ) => Promise<void>;
   removeForward: (forwardId: string, sessionId: string) => Promise<void>;
   toggleForward: (forwardId: string, sessionId: string) => Promise<void>;
@@ -26,7 +26,13 @@ export const usePortForwardStore = create<PortForwardStore>((set) => ({
     }));
   },
 
-  createForward: async (sessionId, ruleType, localPort, remoteHost, remotePort) => {
+  createForward: async (
+    sessionId,
+    ruleType,
+    localPort,
+    remoteHost,
+    remotePort,
+  ) => {
     const rule = await tauri.portForward.create({
       sessionId,
       ruleType,
@@ -47,7 +53,8 @@ export const usePortForwardStore = create<PortForwardStore>((set) => ({
     set((state) => ({
       forwards: {
         ...state.forwards,
-        [sessionId]: state.forwards[sessionId]?.filter((f) => f.id !== forwardId) || [],
+        [sessionId]:
+          state.forwards[sessionId]?.filter((f) => f.id !== forwardId) || [],
       },
     }));
   },
@@ -57,9 +64,10 @@ export const usePortForwardStore = create<PortForwardStore>((set) => ({
     set((state) => ({
       forwards: {
         ...state.forwards,
-        [sessionId]: state.forwards[sessionId]?.map((f) =>
-          f.id === forwardId ? rule : f
-        ) || [],
+        [sessionId]:
+          state.forwards[sessionId]?.map((f) =>
+            f.id === forwardId ? rule : f,
+          ) || [],
       },
     }));
   },

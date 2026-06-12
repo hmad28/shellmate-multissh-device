@@ -1,8 +1,22 @@
 import { useEffect } from 'react';
+import {
+  ArrowLeft,
+  FolderUp,
+  Home,
+  RefreshCw,
+  Upload,
+  FolderPlus,
+  Download,
+  Trash2,
+  ChevronRight,
+  HardDrive,
+  Loader2,
+} from 'lucide-react';
 import { useSftpStore } from '@/stores/sftp-store';
 import { Button } from '@/components/ui/Button';
 import { listen } from '@tauri-apps/api/event';
 import type { SftpProgressEvent } from '@/types/sftp';
+import { cn } from '@/lib/cn';
 
 interface SftpBrowserProps {
   sessionId: string;
@@ -33,26 +47,40 @@ export function SftpBrowser({ sessionId, onClose }: SftpBrowserProps) {
 
     init();
 
-    const unlisten = listen<SftpProgressEvent>(`sftp:progress:${sftpId}`, (event) => {
-      const { transferId, bytesTransferred, totalBytes, filename } = event.payload;
-      const progress = totalBytes > 0 ? (bytesTransferred / totalBytes) * 100 : 0;
-      updateTransfer({ id: transferId, filename, bytesTransferred, totalBytes, progress });
+    const unlisten = listen<SftpProgressEvent>(
+      `sftp:progress:${sftpId}`,
+      (event) => {
+        const { transferId, bytesTransferred, totalBytes, filename } =
+          event.payload;
+        const progress =
+          totalBytes > 0 ? (bytesTransferred / totalBytes) * 100 : 0;
+        updateTransfer({
+          id: transferId,
+          filename,
+          bytesTransferred,
+          totalBytes,
+          progress,
+        });
 
-      if (bytesTransferred >= totalBytes) {
-        setTimeout(() => removeTransfer(transferId), 1000);
-      }
-    });
+        if (bytesTransferred >= totalBytes) {
+          setTimeout(() => removeTransfer(transferId), 1000);
+        }
+      },
+    );
 
     return () => {
-      unlisten.then(fn => fn());
+      unlisten.then((fn) => fn());
       if (sftpId) closeBrowser(sftpId);
     };
   }, [sessionId]);
 
   if (!browser) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-sm text-muted-foreground">Opening SFTP browser...</div>
+      <div className="flex flex-1 items-center justify-center">
+        <div className="flex items-center gap-2 text-sm text-fg-muted">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Opening SFTP browser...
+        </div>
       </div>
     );
   }
@@ -61,13 +89,24 @@ export function SftpBrowser({ sessionId, onClose }: SftpBrowserProps) {
     listDirectory(browser.sftpId, path);
   };
 
+  const handleGoUp = () => {
+    const parts = browser.currentPath.split('/').filter(Boolean);
+    if (parts.length <= 1) {
+      handleNavigate('.');
+    } else {
+      handleNavigate(parts.slice(0, -1).join('/'));
+    }
+  };
+
+  const handleGoHome = () => {
+    handleNavigate('.');
+  };
+
   const handleUpload = () => {
-    // TODO: Integrate with Tauri file picker dialog
     alert('Upload functionality requires file picker integration');
   };
 
   const handleDownload = async (_filename: string) => {
-    // TODO: Integrate with Tauri save dialog
     alert('Download functionality requires save dialog integration');
   };
 
@@ -80,90 +119,144 @@ export function SftpBrowser({ sessionId, onClose }: SftpBrowserProps) {
   const handleMkdir = async () => {
     const name = prompt('New directory name:');
     if (name) {
-      const path = browser.currentPath === '.' ? name : `${browser.currentPath}/${name}`;
+      const path =
+        browser.currentPath === '.' ? name : `${browser.currentPath}/${name}`;
       await mkdir(browser.sftpId, path);
     }
   };
 
   const breadcrumbs = browser.currentPath.split('/').filter(Boolean);
-  const currentPath = browser.currentPath === '.' ? '/' : browser.currentPath;
 
   return (
-    <div className="flex flex-col h-full bg-background border-t">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm">SFTP Browser</span>
-          <span className="text-xs text-muted-foreground">{currentPath}</span>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Close
-        </Button>
-      </div>
-
-      {/* Breadcrumbs */}
-      <div className="flex items-center gap-1 px-4 py-2 border-b bg-muted/50">
+    <div className="flex flex-1 flex-col overflow-hidden bg-bg">
+      {/* Header bar */}
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        {/* Back button */}
         <button
-          onClick={() => handleNavigate('.')}
-          className="text-xs hover:underline text-muted-foreground"
+          onClick={onClose}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-md',
+            'text-fg-muted transition-colors',
+            'hover:bg-bg-elevated hover:text-fg',
+          )}
+          title="Back to terminal (Esc)"
         >
-          /
+          <ArrowLeft size={16} />
         </button>
-        {breadcrumbs.map((crumb, idx) => {
-          const path = breadcrumbs.slice(0, idx + 1).join('/');
-          return (
-            <span key={idx} className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground">/</span>
-              <button
-                onClick={() => handleNavigate(path)}
-                className="text-xs hover:underline"
-              >
-                {crumb}
-              </button>
-            </span>
-          );
-        })}
-      </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b">
-        <Button variant="secondary" size="sm" onClick={handleUpload}>
-          Upload
-        </Button>
-        <Button variant="secondary" size="sm" onClick={handleMkdir}>
-          New Folder
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => handleNavigate(browser.currentPath)}
-        >
-          Refresh
-        </Button>
+        {/* Navigation buttons */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleGoUp}
+            disabled={browser.currentPath === '.'}
+            className={cn(
+              'flex h-8 w-8 items-center justify-center rounded-md',
+              'text-fg-muted transition-colors',
+              'hover:bg-bg-elevated hover:text-fg',
+              'disabled:cursor-not-allowed disabled:opacity-30',
+            )}
+            title="Go up"
+          >
+            <FolderUp size={16} />
+          </button>
+          <button
+            onClick={handleGoHome}
+            className={cn(
+              'flex h-8 w-8 items-center justify-center rounded-md',
+              'text-fg-muted transition-colors',
+              'hover:bg-bg-elevated hover:text-fg',
+            )}
+            title="Go to root"
+          >
+            <Home size={16} />
+          </button>
+          <button
+            onClick={() => handleNavigate(browser.currentPath)}
+            className={cn(
+              'flex h-8 w-8 items-center justify-center rounded-md',
+              'text-fg-muted transition-colors',
+              'hover:bg-bg-elevated hover:text-fg',
+            )}
+            title="Refresh"
+          >
+            <RefreshCw size={16} />
+          </button>
+        </div>
+
+        {/* Breadcrumb path */}
+        <div className="flex flex-1 items-center gap-0.5 overflow-x-auto text-sm">
+          <button
+            onClick={handleGoHome}
+            className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-fg-muted hover:bg-bg-elevated hover:text-fg"
+          >
+            <HardDrive size={14} />
+            <span>/</span>
+          </button>
+          {breadcrumbs.map((crumb, idx) => {
+            const path = breadcrumbs.slice(0, idx + 1).join('/');
+            const isLast = idx === breadcrumbs.length - 1;
+            return (
+              <div key={idx} className="flex shrink-0 items-center">
+                <ChevronRight size={12} className="text-fg-subtle" />
+                <button
+                  onClick={() => handleNavigate(path)}
+                  className={cn(
+                    'rounded px-1.5 py-0.5 transition-colors',
+                    isLast
+                      ? 'font-medium text-fg'
+                      : 'text-fg-muted hover:bg-bg-elevated hover:text-fg',
+                  )}
+                >
+                  {crumb}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={handleUpload}>
+            <Upload size={14} />
+            Upload
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleMkdir}>
+            <FolderPlus size={14} />
+            New Folder
+          </Button>
+        </div>
       </div>
 
       {/* File List */}
       <div className="flex-1 overflow-auto">
         {browser.loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="text-sm text-muted-foreground">Loading...</div>
+          <div className="flex h-32 items-center justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-fg-muted" />
           </div>
         ) : browser.error ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="text-sm text-destructive">{browser.error}</div>
+          <div className="flex h-32 items-center justify-center">
+            <div className="text-destructive text-sm">{browser.error}</div>
           </div>
         ) : browser.files.length === 0 ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="text-sm text-muted-foreground">Empty directory</div>
+          <div className="flex h-32 flex-col items-center justify-center gap-2">
+            <div className="text-sm text-fg-muted">Empty directory</div>
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-muted/50 sticky top-0">
+            <thead className="sticky top-0 bg-bg-sidebar">
               <tr>
-                <th className="text-left px-4 py-2 font-medium">Name</th>
-                <th className="text-right px-4 py-2 font-medium">Size</th>
-                <th className="text-left px-4 py-2 font-medium">Modified</th>
-                <th className="text-right px-4 py-2 font-medium">Actions</th>
+                <th className="px-4 py-2 text-left font-medium text-fg-muted">
+                  Name
+                </th>
+                <th className="w-28 px-4 py-2 text-right font-medium text-fg-muted">
+                  Size
+                </th>
+                <th className="w-48 px-4 py-2 text-left font-medium text-fg-muted">
+                  Modified
+                </th>
+                <th className="w-32 px-4 py-2 text-right font-medium text-fg-muted">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -172,43 +265,60 @@ export function SftpBrowser({ sessionId, onClose }: SftpBrowserProps) {
                   browser.currentPath === '.'
                     ? file.name
                     : `${browser.currentPath}/${file.name}`;
-                const modified = new Date(file.modified * 1000).toLocaleString();
+                const modified = new Date(
+                  file.modified * 1000,
+                ).toLocaleString();
                 const size = file.isDir ? '-' : formatBytes(file.size);
 
                 return (
-                  <tr key={file.name} className="border-t hover:bg-muted/50">
+                  <tr
+                    key={file.name}
+                    className={cn(
+                      'border-t border-border-subtle transition-colors',
+                      'hover:bg-bg-elevated',
+                    )}
+                  >
                     <td className="px-4 py-2">
                       <button
                         onClick={() => file.isDir && handleNavigate(path)}
-                        className="flex items-center gap-2 hover:underline"
+                        className={cn(
+                          'flex items-center gap-2',
+                          file.isDir
+                            ? 'cursor-pointer text-accent hover:underline'
+                            : 'cursor-default text-fg',
+                        )}
                         disabled={!file.isDir}
                       >
-                        <span className="text-lg">
+                        <span className="text-base">
                           {file.isDir ? '📁' : file.isSymlink ? '🔗' : '📄'}
                         </span>
                         <span>{file.name}</span>
                       </button>
                     </td>
-                    <td className="px-4 py-2 text-right text-muted-foreground">{size}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{modified}</td>
+                    <td className="px-4 py-2 text-right font-mono text-xs text-fg-muted">
+                      {size}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-fg-muted">
+                      {modified}
+                    </td>
                     <td className="px-4 py-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         {!file.isDir && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                          <button
                             onClick={() => handleDownload(file.name)}
+                            className="flex h-7 w-7 items-center justify-center rounded text-fg-muted hover:bg-bg-elevated hover:text-fg"
+                            title="Download"
                           >
-                            Download
-                          </Button>
+                            <Download size={14} />
+                          </button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                        <button
                           onClick={() => handleDelete(path)}
+                          className="hover:bg-destructive/10 hover:text-destructive flex h-7 w-7 items-center justify-center rounded text-fg-muted"
+                          title="Delete"
                         >
-                          Delete
-                        </Button>
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -221,19 +331,21 @@ export function SftpBrowser({ sessionId, onClose }: SftpBrowserProps) {
 
       {/* Transfers */}
       {browser.transfers.length > 0 && (
-        <div className="border-t bg-muted/30 px-4 py-2">
-          <div className="text-xs font-medium mb-2">Transfers</div>
+        <div className="border-t border-border bg-bg-sidebar px-4 py-2">
+          <div className="mb-2 text-xs font-medium text-fg-muted">
+            Transfers
+          </div>
           {browser.transfers.map((transfer) => (
             <div key={transfer.id} className="mb-2 last:mb-0">
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="truncate">{transfer.filename}</span>
-                <span className="text-muted-foreground">
+              <div className="mb-1 flex items-center justify-between text-xs">
+                <span className="truncate text-fg">{transfer.filename}</span>
+                <span className="text-fg-muted">
                   {transfer.progress.toFixed(0)}%
                 </span>
               </div>
-              <div className="w-full bg-muted rounded-full h-1.5">
+              <div className="h-1.5 w-full rounded-full bg-border">
                 <div
-                  className="bg-primary h-1.5 rounded-full transition-all"
+                  className="h-1.5 rounded-full bg-accent transition-all"
                   style={{ width: `${transfer.progress}%` }}
                 />
               </div>

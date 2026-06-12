@@ -1,8 +1,8 @@
 # Project Scope
 ## ShellMate — SSH Client (Production v1.0)
 
-**Version:** 2.0
-**Last Updated:** 2026-06-10
+**Version:** 2.3
+**Last Updated:** 2026-06-11
 
 ---
 
@@ -158,7 +158,7 @@ ShellMate v1.0 ships as a complete production release. All items below are requi
 
 ## 6. User Stories
 
-### 5.1 Host Management
+### 6.1 Host Management
 ```
 As a developer,
 I want to add and organize my SSH hosts,
@@ -172,7 +172,7 @@ Acceptance Criteria:
 - All changes save automatically
 ```
 
-### 5.2 Multi-Terminal
+### 6.2 Multi-Terminal
 ```
 As a DevOps engineer,
 I want to connect to multiple servers simultaneously,
@@ -186,7 +186,7 @@ Acceptance Criteria:
 - I can close tabs with confirmation
 ```
 
-### 5.3 Secure Credentials
+### 6.3 Secure Credentials
 ```
 As a security researcher,
 I want my credentials stored securely,
@@ -200,7 +200,7 @@ Acceptance Criteria:
 - Credentials never appear in logs
 ```
 
-### 5.4 Quick Commands
+### 6.4 Quick Commands
 ```
 As a system administrator,
 I want to save frequently used commands,
@@ -215,9 +215,9 @@ Acceptance Criteria:
 
 ---
 
-## 6. Technical Constraints
+## 7. Technical Constraints
 
-### 6.1 Technology Stack
+### 7.1 Technology Stack
 | Layer | Technology | Constraint |
 |-------|------------|------------|
 | Framework | Tauri v2 | Desktop + mobile target |
@@ -232,7 +232,7 @@ Acceptance Criteria:
 | State | Zustand | lightweight, minimal boilerplate |
 | Package Manager | npm + Cargo | cross-platform |
 
-### 6.2 Performance Constraints
+### 7.2 Performance Constraints
 - Cold start: < 2s desktop, < 3s mobile
 - Memory idle: < 80 MB desktop
 - Memory 5 tabs: < 150 MB desktop
@@ -241,7 +241,7 @@ Acceptance Criteria:
 - Mobile binary: < 25 MB
 - Frontend bundle: < 500 KB gzipped (CI gate)
 
-### 6.3 Security Constraints
+### 7.3 Security Constraints
 - All credentials encrypted at rest (per-credential AES-GCM + SQLCipher full-DB)
 - No plaintext logging
 - No telemetry / analytics
@@ -251,16 +251,16 @@ Acceptance Criteria:
 
 ---
 
-## 7. Assumptions
+## 8. Assumptions
 
-### 7.1 User Assumptions
+### 8.1 User Assumptions
 - Users have basic SSH knowledge
 - Users understand terminal commands
 - Users have SSH servers to connect to
 - Users prefer local-first applications
 - Users with multi-device needs already have a cloud account (iCloud/GDrive/Dropbox/S3) or self-hosted endpoint
 
-### 7.2 Technical Assumptions
+### 8.2 Technical Assumptions
 - Target servers have SSH (and optionally Mosh) servers running
 - Network connectivity available for SSH (reasonable latency for SSH; Mosh tolerates lossy networks)
 - Sufficient disk space for SQLite + SQLCipher database
@@ -269,9 +269,9 @@ Acceptance Criteria:
 
 ---
 
-## 8. Dependencies
+## 9. Dependencies
 
-### 8.1 External Dependencies
+### 9.1 External Dependencies
 | Dependency | Version | Purpose |
 |------------|---------|---------|
 | Tauri | v2.x | App framework (desktop + mobile) |
@@ -285,7 +285,7 @@ Acceptance Criteria:
 | Tailwind CSS | 3.x | Styling |
 | shadcn/ui | latest | Accessible component primitives |
 
-### 8.2 Development Dependencies
+### 9.2 Development Dependencies
 | Dependency | Purpose |
 |------------|---------|
 | Node.js | Frontend tooling |
@@ -298,9 +298,9 @@ Acceptance Criteria:
 
 ---
 
-## 9. Deliverables
+## 10. Deliverables
 
-### 9.1 v1.0 Production Release
+### 10.1 v1.0 Production Release
 1. **Application Binaries (signed)**
    - Windows MSI installer (Authenticode-signed)
    - macOS DMG (notarized) — Intel + Apple Silicon
@@ -327,7 +327,7 @@ Acceptance Criteria:
 
 ---
 
-## 10. Phasing & Timeline
+## 11. Phasing & Timeline
 
 ShellMate v1.0 is delivered **scope-driven** — no fixed deadlines. Each phase ships when acceptance criteria are met.
 
@@ -335,10 +335,10 @@ ShellMate v1.0 is delivered **scope-driven** — no fixed deadlines. Each phase 
 |-------|--------|------|
 | 1 | ✅ Complete (2026-06-09) | Project Setup |
 | 2 | ✅ Complete (2026-06-10) | Core SSH + Vault + Terminal |
-| 3 | ⏳ Pending | Host Management & Persistence |
-| 4 | ⏳ Pending | Productivity & Settings (snippets, themes, shortcuts) |
-| 5 | ⏳ Pending | File Transfer & Network (SFTP, port forward) |
-| 6 | ⏳ Pending | Network Hardening (known hosts, Mosh, broadcast) |
+| 3 | ✅ Complete (2026-06-10) | Host Management & Persistence |
+| 4 | ✅ Complete (2026-06-10) | Productivity & Settings (snippets, themes, shortcuts) |
+| 5 | ✅ Complete (2026-06-10) | File Transfer & Network (SFTP, port forward) |
+| 6 | ✅ Complete (2026-06-10) | Network Hardening (known hosts, Mosh, broadcast) |
 | 7 | ⏳ Pending | Full-DB Encryption (SQLCipher migration) |
 | 8 | ⏳ Pending | Biometric Unlock |
 | 9 | ⏳ Pending | Multi-Device Sync (E2E) |
@@ -352,9 +352,9 @@ See `docs/01-development-plan.md` for detailed deliverables per phase.
 
 ---
 
-## 11. Success Criteria
+## 12. Success Criteria
 
-### 11.1 Functional
+### 12.1 Functional
 - [ ] Add/edit/delete/group/search hosts with drag-and-drop
 - [ ] Connect to many SSH servers simultaneously, broadcast to multiple
 - [ ] Mosh fallback for unreliable networks
@@ -367,20 +367,20 @@ See `docs/01-development-plan.md` for detailed deliverables per phase.
 - [ ] Plugin system runs sandboxed third-party WASM
 - [ ] Audit log captures opt-in events
 
-### 11.2 Technical
-- [ ] All performance targets met (see §2.2)
+### 12.2 Technical
+- [ ] All performance targets met (see §7.2)
 - [ ] Builds and runs on Windows, macOS, Linux, Android, iOS
 - [ ] No crashes or data loss in 30-day soak test
 - [ ] All unit + integration tests pass in CI
 - [ ] Code coverage targets met (per docs/08-devops §14.1)
 
-### 11.3 Security
+### 12.3 Security
 - [ ] Independent security review pass
 - [ ] No critical vulnerabilities in dependency audit
 - [ ] Vault recovery scenarios tested (lost device, stolen device)
 - [ ] Sync E2E encryption verified (cloud provider cannot read payloads)
 
-### 11.4 User Experience
+### 12.4 User Experience
 - [ ] WCAG 2.1 AA pass for UI chrome
 - [ ] Manual screen reader smoke test pass (NVDA + VoiceOver)
 - [ ] Keyboard-only navigation walkthrough pass
