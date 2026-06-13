@@ -40,36 +40,39 @@ export function SftpBrowser({ sessionId, onClose }: SftpBrowserProps) {
 
   useEffect(() => {
     let sftpId: string | null = null;
+    let unlistenFn: (() => void) | null = null;
 
     const init = async () => {
       sftpId = await openBrowser(sessionId);
+      if (!sftpId) return;
+
+      const unlisten = await listen<SftpProgressEvent>(
+        `sftp:progress:${sftpId}`,
+        (event) => {
+          const { transferId, bytesTransferred, totalBytes, filename } =
+            event.payload;
+          const progress =
+            totalBytes > 0 ? (bytesTransferred / totalBytes) * 100 : 0;
+          updateTransfer({
+            id: transferId,
+            filename,
+            bytesTransferred,
+            totalBytes,
+            progress,
+          });
+
+          if (bytesTransferred >= totalBytes) {
+            setTimeout(() => removeTransfer(transferId), 1000);
+          }
+        },
+      );
+      unlistenFn = unlisten;
     };
 
     init();
 
-    const unlisten = listen<SftpProgressEvent>(
-      `sftp:progress:${sftpId}`,
-      (event) => {
-        const { transferId, bytesTransferred, totalBytes, filename } =
-          event.payload;
-        const progress =
-          totalBytes > 0 ? (bytesTransferred / totalBytes) * 100 : 0;
-        updateTransfer({
-          id: transferId,
-          filename,
-          bytesTransferred,
-          totalBytes,
-          progress,
-        });
-
-        if (bytesTransferred >= totalBytes) {
-          setTimeout(() => removeTransfer(transferId), 1000);
-        }
-      },
-    );
-
     return () => {
-      unlisten.then((fn) => fn());
+      unlistenFn?.();
       if (sftpId) closeBrowser(sftpId);
     };
   }, [sessionId]);

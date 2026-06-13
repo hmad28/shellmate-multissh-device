@@ -218,7 +218,9 @@ pub async fn search_hosts(
     if q.is_empty() {
         return get_hosts(state).await;
     }
-    let pattern = format!("%{}%", q.to_lowercase());
+    // Escape SQL LIKE wildcards to prevent unintended pattern matching
+    let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let pattern = format!("%{}%", escaped.to_lowercase());
 
     let conn = state.db.lock();
     let mut stmt = conn.prepare(
@@ -227,12 +229,12 @@ pub async fn search_hosts(
                 h.created_at, h.updated_at
          FROM hosts h
          LEFT JOIN groups g ON g.id = h.group_id
-         WHERE LOWER(h.label) LIKE ?1
-            OR LOWER(h.hostname) LIKE ?1
-            OR LOWER(h.username) LIKE ?1
-            OR LOWER(COALESCE(g.name, '')) LIKE ?1
-            OR LOWER(COALESCE(h.tags, '')) LIKE ?1
-            OR LOWER(COALESCE(h.notes, '')) LIKE ?1
+         WHERE LOWER(h.label) LIKE ?1 ESCAPE '\\'
+            OR LOWER(h.hostname) LIKE ?1 ESCAPE '\\'
+            OR LOWER(h.username) LIKE ?1 ESCAPE '\\'
+            OR LOWER(COALESCE(g.name, '')) LIKE ?1 ESCAPE '\\'
+            OR LOWER(COALESCE(h.tags, '')) LIKE ?1 ESCAPE '\\'
+            OR LOWER(COALESCE(h.notes, '')) LIKE ?1 ESCAPE '\\'
          ORDER BY h.label ASC",
     )?;
     let rows = stmt.query_map([&pattern], |row| {

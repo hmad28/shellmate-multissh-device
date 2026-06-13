@@ -73,7 +73,7 @@ export function P2pSyncPanel() {
         {strings.p2pSync?.title ?? 'P2P Local Sync'}
       </div>
 
-      <p className="text-muted-foreground text-xs">
+      <p className="text-fg-muted text-xs">
         {strings.p2pSync?.description ??
           'Sync your hosts, credentials, and snippets to your mobile device over the local network.'}
       </p>
@@ -84,7 +84,7 @@ export function P2pSyncPanel() {
           <button
             onClick={startServer}
             disabled={loading}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium disabled:opacity-50"
+            className="bg-accent text-white hover:bg-accent-hover flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -97,7 +97,7 @@ export function P2pSyncPanel() {
           <button
             onClick={stopServer}
             disabled={loading}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium disabled:opacity-50"
+            className="bg-red-500 text-white hover:bg-red-600 flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -112,17 +112,17 @@ export function P2pSyncPanel() {
       {/* PIN display */}
       {isRunning && pin && (
         <div className="space-y-2">
-          <p className="text-muted-foreground text-xs">
+          <p className="text-fg-muted text-xs">
             {strings.p2pSync?.enterPinOnMobile ??
               'Enter this PIN on your mobile device:'}
           </p>
           <div className="flex items-center gap-2">
-            <div className="bg-muted flex-1 rounded-md p-3 text-center font-mono text-lg tracking-widest">
+            <div className="bg-bg-sidebar flex-1 rounded-md p-3 text-center font-mono text-lg tracking-widest">
               {pin}
             </div>
             <button
               onClick={copyPin}
-              className="hover:bg-muted rounded-md p-2"
+              className="hover:bg-bg-elevated rounded-md p-2"
               title="Copy PIN"
             >
               {copied ? (
@@ -132,7 +132,7 @@ export function P2pSyncPanel() {
               )}
             </button>
           </div>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-fg-muted text-xs">
             {strings.p2pSync?.scanQrOrEnterPin ??
               'On mobile: tap "Sync Devices" and enter this PIN.'}
           </p>
@@ -146,7 +146,7 @@ export function P2pSyncPanel() {
       )}
 
       {error && (
-        <div className="bg-destructive/10 text-destructive rounded p-2 text-xs">
+        <div className="bg-red-500/10 text-red-400 rounded p-2 text-xs">
           {error}
         </div>
       )}

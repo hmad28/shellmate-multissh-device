@@ -1,6 +1,13 @@
 export interface VaultStatus {
   initialized: boolean;
   unlocked: boolean;
+  dbEncrypted: boolean;
+}
+
+export interface BiometricStatus {
+  available: boolean;
+  enabled: boolean;
+  platform: string;
 }
 
 export interface ConnectByHostInput {
@@ -17,6 +24,7 @@ export interface QuickConnectInput {
   username: string;
   label: string | null;
   auth: QuickConnectAuth;
+  shell?: string;
 }
 
 export type SshSessionStatus =

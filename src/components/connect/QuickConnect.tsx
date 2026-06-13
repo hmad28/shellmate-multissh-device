@@ -24,6 +24,7 @@ export function QuickConnect({ onConnected }: QuickConnectProps) {
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [passphrase, setPassphrase] = useState('');
+  const [shell, setShell] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +63,7 @@ export function QuickConnect({ onConnected }: QuickConnectProps) {
                 privateKey,
                 passphrase: passphrase.length > 0 ? passphrase : null,
               },
+        ...(shell.trim() ? { shell: shell.trim() } : {}),
       });
       // Clear sensitive fields immediately after submit succeeds
       setPassword('');
@@ -170,6 +172,32 @@ export function QuickConnect({ onConnected }: QuickConnectProps) {
           />
         </>
       )}
+
+      <div>
+        <label
+          htmlFor="qc-shell"
+          className="mb-1 block text-xs text-fg-muted"
+        >
+          Shell (optional)
+        </label>
+        <select
+          id="qc-shell"
+          value={shell}
+          onChange={(e) => setShell(e.target.value)}
+          className={cn(
+            'w-full rounded-md border border-border-subtle bg-bg-elevated px-3 py-2 text-sm text-fg',
+            'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent',
+          )}
+        >
+          <option value="">Default (server&apos;s default shell)</option>
+          <option value="/bin/bash">bash</option>
+          <option value="/bin/zsh">zsh</option>
+          <option value="/bin/fish">fish</option>
+          <option value="/bin/sh">sh</option>
+          <option value="powershell">PowerShell</option>
+          <option value="cmd">CMD</option>
+        </select>
+      </div>
 
       {error && (
         <p

@@ -7,6 +7,184 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Phase 14: Polish & Distribution (2026-06-13)
+
+**Toast Notifications** (`src/`):
+- Zustand toast store with auto-dismiss (success/error/warning/info)
+- `ToastContainer` component with typed styling, dismiss button, fixed top-right
+- Integrated into AppLayout (desktop + mobile)
+
+**Encrypted Export/Import** (`src-tauri/`):
+- `export_hosts_encrypted` — exports all hosts with credentials as encrypted base64 blob (SMEX format)
+- `import_hosts_encrypted` — decrypts and imports hosts, creates groups as needed
+- Argon2id + AES-256-GCM encryption with separate export password
+- Frontend wrappers: `tauri.export.hostsEncrypted()` / `importHostsEncrypted()`
+
+### Added — Phase 13: Audit Log (2026-06-13)
+
+**Audit System** (`src-tauri/`):
+- `AuditLog` with hash-chained encrypted event storage
+- Event types: session_start, session_end, sftp_transfer, command_sent, vault_lock/unlock, host CRUD, settings_changed
+- AES-256-GCM encrypted payloads with vault key
+- SHA256 hash chain for tamper detection
+- Per-host opt-in (default OFF), command history separate opt-in
+- Pattern-based redaction (password, token, api_key, etc.)
+- Configurable retention per host (default 90 days)
+- `purge()` removes events older than retention threshold
+- JSONL export format
+- Database tables: `audit_events`, `audit_settings` (migration 009)
+- 6 Tauri commands: `audit_record`, `audit_query`, `audit_export`, `audit_purge`, `audit_get_settings`, `audit_set_settings`
+
+**Frontend** (`src/`):
+- `AuditEvent`, `AuditSettings`, `AuditQuery` types
+- `tauri.audit.*` command wrappers
+
+### Added — Phase 12: Plugin System (2026-06-13)
+
+**Plugin Runtime** (`src-tauri/`):
+- Wasmtime v29 WASM runtime with WASI support
+- `PluginRuntime` — sandboxed execution, crash isolation via `spawn_blocking`
+- `PluginManager` — install, list, uninstall, enable/disable, capability management
+- `PluginManifest` — JSON manifest format with capability declarations + validation
+- Capability model: `log`, `panel`, `terminal_data`, `network`, `filesystem`, `secrets` (all opt-in)
+- Database tables: `plugins`, `plugin_capabilities` (migration 008)
+- WASM files copied to `<app_data>/plugins/` on install, cleaned on uninstall
+- 9 Tauri commands: `plugin_list`, `plugin_install`, `plugin_uninstall`, `plugin_enable`, `plugin_disable`, `plugin_get_capabilities`, `plugin_grant_capability`, `plugin_revoke_capability`, `plugin_execute`
+
+**Frontend** (`src/`):
+- `Plugin`, `PluginCapability`, `PluginManifest` types
+- `tauri.plugin.*` command wrappers
+
+**Dependencies**: `wasmtime` v29, `wasmtime-wasi` v29
+
+### Added — Phase 11: Team Vault (2026-06-13)
+
+**Team Management** (`src-tauri/`):
+- `TeamManager` with full CRUD: create, list, delete teams
+- Member management: add member by public key, list members, revoke (timestamp-based)
+- Host sharing: share host with team, set permissions (read/edit), remove share
+- Team master key: random 32 bytes, wrapped with vault key via AES-256-GCM
+- Member key wrapping: HKDF-SHA256 derived key from member pubkey, AES-256-GCM wrap
+- Database tables: `team`, `team_members`, `team_shares` with cascade deletes (migration 007)
+- 9 Tauri commands: `team_create`, `team_list`, `team_delete`, `team_add_member`, `team_list_members`, `team_revoke_member`, `team_share_host`, `team_list_shares`, `team_remove_share`
+
+**Frontend** (`src/`):
+- `Team`, `TeamMember`, `TeamShare` types + input interfaces
+- `tauri.team.*` command wrappers
+
+### Added — Phase 10: Mobile Apps (2026-06-13)
+
+**Mobile UI** (`src/`):
+- `useIsMobile` hook — responsive mobile detection via `matchMedia` (768px breakpoint)
+- `MobileLayout` — mobile-first layout with bottom navigation, StatusBar, VaultGate
+- `BottomNav` — fixed bottom tab bar (Hosts, Terminal, Snippets, Settings)
+- `MobileKeyBar` — extended key bar for terminal: Esc, Tab, Ctrl, Alt, arrows, symbols; Ctrl/Alt modifier toggle
+- `AppLayout` — conditional render: MobileLayout on mobile, DesktopLayout on desktop
+- Terminal component — flex layout with MobileKeyBar integration on mobile
+- CSS safe area utilities for iOS notch/home indicator
+- Touch scroll optimization and hidden scrollbars on coarse pointers
+- `100dvh` viewport height fix for mobile browsers
+
+**Android Config** (`src-tauri/`):
+- `jni` v0.21 + `android_logger` v0.13 (cfg-gated to Android target)
+
+### Added — Phase 9: Multi-Device Sync (E2E) (2026-06-13)
+
+**Sync Engine** (`src-tauri/`):
+- `SyncEngine` with version vector clocks for multi-device conflict detection
+- Two-phase sync: upload pending changes, download remote changes
+- Per-entity sync state tracking (`sync_state` table) with version vectors
+- Sync backend configuration (`sync_config` table) with encrypted credentials
+- `mark_changed()` API for tracking local mutations
+
+**Sync Backends** (`src-tauri/src/sync/backend/`):
+- `SyncBackend` trait with async `put/get/list/delete` methods
+- `HttpBackend` — self-hosted HTTP REST API with bearer token auth
+- `S3Backend` — AWS Signature V4 signing, supports AWS S3, MinIO, Backblaze B2
+- Opaque UUID object IDs — no metadata leakage in cloud storage keys
+
+**Encryption & Conflict Resolution**:
+- AES-256-GCM per-payload encryption with HKDF-derived key (nonce prepended)
+- Version vector conflict detection (concurrent edit detection)
+- Last-write-wins conflict resolution
+
+**Commands**: `sync_status`, `sync_configure`, `sync_now`, `sync_pause`, `sync_resume`
+
+**Frontend** (`src/`):
+- `SyncStatus`, `SyncConfigureInput`, `SyncResult` types
+- `tauri.sync` command wrappers (status/configure/now/pause/resume)
+
+**Dependencies**: `reqwest` v0.13, `hmac` v0.12
+
+### Added — Phase 8: Biometric Unlock (2026-06-13)
+
+**Windows Hello Integration** (`src-tauri/`):
+- Biometric unlock via Windows Hello `KeyCredentialManager` (TPM-backed key creation/opening)
+- `BiometricProvider` trait with platform-specific dispatch (`cfg(target_os)`)
+- AES-256-GCM vault key wrapping with HKDF-derived key from 32-byte device secret
+- `biometric_state` SQLite table for per-device enrollment persistence
+- `vault.unlock_with_key()` for direct key-based unlock (bypasses password verification)
+- Commands: `biometric_status`, `biometric_enable`, `biometric_disable`, `biometric_unlock`
+- Biometric failures independent of master password lockout counter
+- `windows` v0.62 + `windows-future` v0.3 dependencies (Windows-only, cfg-gated)
+
+**Frontend** (`src/`):
+- `BiometricStatus` type (available, enabled, platform)
+- `tauri.biometric` command wrappers (status/enable/disable/unlock)
+
+### Added — Phase 7: Full-DB Encryption (SQLCipher) (2026-06-13)
+
+**SQLCipher Integration** (`src-tauri/`):
+- Full database encryption at rest using SQLCipher (AES-256-CBC + HMAC-SHA512)
+- `rusqlite` upgraded to `bundled-sqlcipher` feature for compile-time SQLCipher bundling
+- HKDF-SHA256 key derivation with domain separation: vault key (`info: "vault-key"`) and DB key (`info: "db-key"`) derived from single Argon2id master key
+- Automatic plaintext-to-encrypted migration on first vault unlock (backup as `.db.bak`)
+- `PRAGMA rekey` for in-place SQLCipher key rotation on master password change
+- `AppState.swap_db()` for runtime connection replacement after migration
+- `vault_status` command now includes `db_encrypted` field
+- All master keys zeroized immediately after HKDF split; vault/db keys zeroized on lock or error
+
+**Security Properties**:
+- Defense in depth: per-credential AES-256-GCM + SQLCipher full-DB encryption
+- Metadata protection: hostnames, usernames, groups, snippets, settings encrypted at rest
+- Key isolation: vault key and DB key derived via HKDF with different `info` parameters
+- Zeroization: master key zeroized after split; keys zeroized on lock/error
+
+**Build Dependencies**:
+- OpenSSL dev headers required for `bundled-sqlcipher` on Windows (`OPENSSL_LIB_DIR`, `OPENSSL_INCLUDE_DIR`)
+
+### Added — Termul Feature Parity & Bug Fixes (2026-06-13)
+
+**Critical Security Fixes** (`src-tauri/`):
+- P2P sync: replaced single SHA-256 PIN key derivation with Argon2id (memory-hard), bound server to `127.0.0.1` instead of `0.0.0.0`, added per-IP rate limiting (10 attempts/60s window).
+- VIP access: fixed `inject_authorized_keys` to convert hex-encoded public key to base64 (required by OpenSSH `authorized_keys` format).
+
+**Bug Fixes** (`src/`):
+- Fixed SFTP progress listener race condition — now `await`s `openBrowser()` before subscribing to events.
+- Terminal now reads settings from `useSettingsStore` (fontSize, scrollback, cursorStyle, cursorBlink, theme) instead of hardcoded values.
+- Broadcast mode now uses SSH session IDs (via `ssh-store.sessionByTab`) instead of tab IDs.
+- Replaced non-existent shadcn/ui CSS classes in VipAccessPanel and P2pSyncPanel with project Tailwind classes.
+- Deleted stale `vite.config.js` (compiled artifact duplicate).
+
+**Backend Fixes** (`src-tauri/`):
+- `commands/known_hosts.rs` and `commands/broadcast.rs`: changed `Result<T, String>` → `AppResult<T>` for consistency.
+- `port_forward/mod.rs`: fixed `toggle_forward` to actually pause/resume TCP listener via shared `Arc<RwLock<bool>>`.
+- `commands/host.rs`: added SQL LIKE wildcard escaping (`%`, `_`) in `search_hosts`.
+
+**Documentation Fixes**:
+- `docs/08-devops-plan.md`: replaced all `bun` references with `npm`.
+- `docs/02-project-scope.md`: fixed NFR targets to match PRD, updated Mosh to Phase 14.
+- `README.md`: fixed Mosh phase reference.
+
+**New Features — Power User Tools**:
+- **Error Boundaries**: `ErrorBoundary` component wrapping app at top and feature levels with fallback UI and reset.
+- **Command Palette** (`Ctrl+K` / `Ctrl+Shift+P`): modal with fuzzy search, grouped results, keyboard navigation, 13 default commands.
+- **Keyboard Shortcuts System**: store + hook with 6 default bindings (Ctrl+T, Ctrl+W, Ctrl+B, Ctrl+K, Ctrl+PageDown/Up).
+- **Git Integration**: StatusBar shows local git branch, dirty state, ahead/behind indicators (polls every 10s via `git_get_info` Tauri command).
+- **Multiple Shell Support**: optional shell field on QuickConnect (bash, zsh, fish, sh, PowerShell, CMD); uses `channel.exec()` for custom shell.
+- **Command History**: `command_history` DB table, CRUD commands, HistoryPanel with search and click-to-rerun.
+- **Auto-Updater**: `tauri-plugin-updater` integrated with 30-min check interval, UpdateToast with download+install+relaunch.
+
 ### Fixed — Phase 1–6 Integration & Compile-Time Fixes (2026-06-11)
 
 **Backend** (`src-tauri/`):

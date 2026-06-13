@@ -1,6 +1,8 @@
 use crate::errors::{AppError, AppResult};
 use argon2::{Algorithm, Argon2, Params, Version};
+use hkdf::Hkdf;
 use rand::RngCore;
+use sha2::Sha256;
 
 /// Argon2id parameters tuned per OWASP guidance, balanced for desktop UX (~500ms-1s).
 /// Memory cost is the dominant security factor; do not lower without review.
@@ -56,6 +58,18 @@ pub fn generate_salt() -> [u8; SALT_LEN] {
     let mut salt = [0u8; SALT_LEN];
     rand::thread_rng().fill_bytes(&mut salt);
     salt
+}
+
+/// Derive two independent 32-byte keys from a single master key using HKDF.
+/// - `vault_key`: used for per-credential AES-256-GCM encryption
+/// - `db_key`: used as the SQLCipher database encryption key
+pub fn derive_vault_and_db_keys(master_key: &[u8; KEY_LEN]) -> ([u8; KEY_LEN], [u8; KEY_LEN]) {
+    let hk = Hkdf::<Sha256>::new(Some(b"shellmate-v1"), master_key);
+    let mut vault_key = [0u8; KEY_LEN];
+    let mut db_key = [0u8; KEY_LEN];
+    hk.expand(b"vault-key", &mut vault_key).expect("HKDF expand failed");
+    hk.expand(b"db-key", &mut db_key).expect("HKDF expand failed");
+    (vault_key, db_key)
 }
 
 #[cfg(test)]

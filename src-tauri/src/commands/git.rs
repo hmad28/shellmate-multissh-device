@@ -1,0 +1,48 @@
+use serde::Serialize;
+use std::process::Command;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitInfo {
+    pub branch: Option<String>,
+    pub has_changes: bool,
+    pub ahead: u32,
+    pub behind: u32,
+}
+
+#[tauri::command]
+pub fn git_get_info(path: Option<String>) -> GitInfo {
+    let dir = path.as_deref().unwrap_or(".");
+    let branch = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], dir);
+    let has_changes = run_git(&["status", "--porcelain"], dir)
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+
+    let (ahead, behind) = match run_git(&["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], dir) {
+        Some(output) => {
+            let parts: Vec<&str> = output.trim().split('\t').collect();
+            (
+                parts.first().and_then(|s| s.parse().ok()).unwrap_or(0),
+                parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0),
+            )
+        }
+        None => (0, 0),
+    };
+
+    GitInfo {
+        branch,
+        has_changes,
+        ahead,
+        behind,
+    }
+}
+
+fn run_git(args: &[&str], dir: &str) -> Option<String> {
+    Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+}

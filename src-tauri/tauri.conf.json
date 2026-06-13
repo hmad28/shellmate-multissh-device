@@ -41,5 +41,11 @@
     "category": "DeveloperTool",
     "shortDescription": "Self-hosted, local-first SSH client",
     "longDescription": "ShellMate is a self-hosted, local-first SSH client desktop app with modern UX, multi-SSH connection support, and encrypted credential vault."
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": []
+    }
   }
 }

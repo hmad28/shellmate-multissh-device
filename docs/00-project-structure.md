@@ -48,7 +48,9 @@ shellmate/
 │   │   │   ├── discovery.rs    # mDNS device discovery
 │   │   │   ├── vip_access.rs   # VIP passwordless SSH access
 │   │   │   ├── p2p_sync.rs     # P2P local sync engine
-│   │   │   └── settings.rs     # App settings management
+│   │   │   ├── settings.rs     # App settings management
+│   │   │   ├── git.rs          # Git integration (branch, status)
+│   │   │   └── history.rs      # Command history CRUD
 │   │   │
 │   │   ├── ssh/                # SSH implementation
 │   │   │   ├── mod.rs
@@ -180,7 +182,10 @@ shellmate/
 │   │   ├── settings-store.ts   # Settings state
 │   │   ├── broadcast-store.ts  # Broadcast mode state
 │   │   ├── discovery-store.ts  # mDNS discovery state
-│   │   └── ui-store.ts         # UI state (sidebar, modals, etc.)
+│   │   ├── ui-store.ts         # UI state (sidebar, modals, etc.)
+│   │   ├── command-store.ts    # Command palette registry
+│   │   ├── shortcuts-store.ts  # Keyboard shortcuts bindings
+│   │   └── history-store.ts    # Command history state
 │   │
 │   ├── hooks/                  # Custom React hooks
 │   │   ├── useTerminal.ts      # Terminal hook
@@ -189,7 +194,9 @@ shellmate/
 │   │   ├── useHosts.ts         # Host management hook
 │   │   ├── useSnippets.ts      # Snippet management hook
 │   │   ├── useVault.ts         # Vault operations hook
-│   │   ├── useKeyboard.ts      # Keyboard shortcuts hook
+│   │   ├── useKeyboardShortcuts.ts # Keyboard shortcuts hook
+│   │   ├── useCommands.ts      # Command palette registration
+│   │   ├── useAutoUpdater.ts   # Auto-updater hook
 │   │   └── useTheme.ts         # Theme management hook
 │   │
 │   ├── lib/                    # Utility libraries

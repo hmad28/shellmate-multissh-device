@@ -54,7 +54,7 @@ export function VipAccessPanel() {
         {strings.vipAccess?.title ?? 'VIP Passwordless Access'}
       </div>
 
-      <p className="text-muted-foreground text-xs">
+      <p className="text-fg-muted text-xs">
         {strings.vipAccess?.description ??
           'Configure passwordless SSH access from your mobile device to this desktop.'}
       </p>
@@ -62,7 +62,7 @@ export function VipAccessPanel() {
       {/* Status */}
       <button
         onClick={checkStatus}
-        className="text-primary text-xs hover:underline"
+        className="text-accent text-xs hover:underline"
       >
         {strings.vipAccess?.checkStatus ?? 'Check Status'}
       </button>
@@ -73,7 +73,7 @@ export function VipAccessPanel() {
             {status.authorizedKeysInjected ? (
               <Check className="h-3 w-3 text-green-500" />
             ) : (
-              <Key className="text-muted-foreground h-3 w-3" />
+              <Key className="text-fg-muted h-3 w-3" />
             )}
             <span>
               {strings.vipAccess?.authKeys ?? 'authorized_keys'}:{' '}
@@ -84,7 +84,7 @@ export function VipAccessPanel() {
             {status.hostExists ? (
               <Check className="h-3 w-3 text-green-500" />
             ) : (
-              <Server className="text-muted-foreground h-3 w-3" />
+              <Server className="text-fg-muted h-3 w-3" />
             )}
             <span>
               {strings.vipAccess?.localhostHost ?? 'VIP Host'}:{' '}
@@ -98,7 +98,7 @@ export function VipAccessPanel() {
       <button
         onClick={generateAndInject}
         disabled={loading}
-        className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium disabled:opacity-50"
+        className="bg-accent text-white hover:bg-accent-hover flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium disabled:opacity-50"
       >
         {loading ? (
           <Loader2 className="h-3 w-3 animate-spin" />
@@ -115,7 +115,7 @@ export function VipAccessPanel() {
       )}
 
       {error && (
-        <div className="bg-destructive/10 text-destructive rounded p-2 text-xs">
+        <div className="bg-red-500/10 text-red-400 rounded p-2 text-xs">
           {error}
         </div>
       )}

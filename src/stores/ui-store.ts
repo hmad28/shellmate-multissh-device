@@ -8,7 +8,8 @@ export type ActivePanel =
   | 'port-forward'
   | 'broadcast'
   | 'vip-access'
-  | 'p2p-sync';
+  | 'p2p-sync'
+  | 'history';
 
 interface UiStore {
   sidebarCollapsed: boolean;

@@ -33,6 +33,7 @@ pub struct ConnectParams {
     pub username: String,
     pub auth: AuthMaterial,
     pub label: Option<String>,
+    pub shell: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -282,10 +283,18 @@ async fn run_session(
         .await
         .map_err(|e| AppError::Internal(format!("request pty failed: {e}")))?;
 
-    channel
-        .request_shell(false)
-        .await
-        .map_err(|e| AppError::Internal(format!("request shell failed: {e}")))?;
+    // If a specific shell is requested, exec it; otherwise use the default shell.
+    if let Some(ref shell) = params.shell {
+        channel
+            .exec(false, shell.as_str())
+            .await
+            .map_err(|e| AppError::Internal(format!("exec shell '{}' failed: {e}", shell)))?;
+    } else {
+        channel
+            .request_shell(false)
+            .await
+            .map_err(|e| AppError::Internal(format!("request shell failed: {e}")))?;
+    }
 
     let handle = Arc::new(handle);
 

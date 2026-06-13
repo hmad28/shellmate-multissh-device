@@ -2,8 +2,13 @@ import { useEffect } from 'react';
 import { VaultGate } from '@/components/vault/VaultGate';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { DragGhost } from '@/components/layout/DragGhost';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { CommandPalette } from '@/components/ui/CommandPalette';
+import { UpdateToast } from '@/components/updates/UpdateToast';
 import { useAutoLock } from '@/hooks/useAutoLock';
 import { useCustomDragDrop } from '@/hooks/useCustomDragDrop';
+import { useRegisterCommands } from '@/hooks/useCommands';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useVaultStore } from '@/stores/vault-store';
 import { useTabStore } from '@/stores/tab-store';
@@ -27,6 +32,12 @@ export default function App() {
 
   // Custom mouse-based drag and drop engine.
   useCustomDragDrop();
+
+  // Register default command palette commands.
+  useRegisterCommands();
+
+  // Register global keyboard shortcuts.
+  useKeyboardShortcuts();
 
   // Reset all session/tab/pane state whenever the vault lock state changes.
   const unlocked = useVaultStore((s) => s.unlocked);
@@ -57,9 +68,13 @@ export default function App() {
 
   return (
     <>
-      <VaultGate>
-        <AppLayout />
-      </VaultGate>
+      <ErrorBoundary>
+        <VaultGate>
+          <AppLayout />
+        </VaultGate>
+      </ErrorBoundary>
+      <CommandPalette />
+      <UpdateToast />
       <DragGhost />
     </>
   );

@@ -139,7 +139,7 @@ For full details see [PRD.md §10 Milestones](PRD.md) and [docs/01-development-p
 | Styling | Tailwind CSS 3 + shadcn/ui |
 | Terminal | [xterm.js](https://xtermjs.org/) — industry standard |
 | SSH Backend | Rust via [`russh`](https://crates.io/crates/russh) crate |
-| Mosh | Rust (planned, Phase 6) |
+| Mosh | Rust (planned, Phase 14) |
 | Local Storage | SQLite via [`rusqlite`](https://crates.io/crates/rusqlite) + SQLCipher (Phase 7) |
 | SFTP | [`russh-sftp`](https://crates.io/crates/russh-sftp) |
 | Encryption | AES-256-GCM + Argon2id |

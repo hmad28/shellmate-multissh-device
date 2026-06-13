@@ -11,15 +11,20 @@ rust-version = "1.77"
 name = "shellmate_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+android_logger = "0.13"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
@@ -35,6 +40,8 @@ rand = "0.8"
 subtle = "2.6"
 base64 = "0.22"
 sha2 = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
 
 # SSH & async runtime
 russh = "0.45"
@@ -50,6 +57,25 @@ ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand_core = "0.6"
 dirs = "5"
 hex = "0.4"
+reqwest = { version = "0.13", features = ["json"] }
+
+# Plugin system (Wasmtime WASM runtime)
+wasmtime = { version = "29", features = ["component-model"] }
+wasmtime-wasi = "29"
+
+# Biometric / Windows Hello (Windows-only)
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62"
+features = [
+    "Security_Credentials",
+    "Security_Credentials_UI",
+    "Foundation",
+    "Foundation_Collections",
+]
+
+[target.'cfg(windows)'.dependencies]
+pollster = "0.4"
+windows-future = "0.3"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

@@ -6,11 +6,16 @@ mod crypto;
 mod db;
 mod errors;
 mod known_hosts;
+mod plugin;
 mod port_forward;
 mod sftp;
 mod ssh;
 mod state;
 mod vault;
+mod biometric;
+mod sync;
+mod team;
+mod audit;
 
 use crate::commands::p2p_sync::SyncServerState;
 use crate::commands::vip_access::VipKeyStore;
@@ -26,6 +31,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -34,9 +40,9 @@ pub fn run() {
             let db_path = app_data_dir.join("shellmate.db");
 
             log::info!("Opening database at {}", db_path.display());
-            let conn = db::open(&db_path).expect("failed to initialize database");
+            let conn = db::open(&db_path, None).expect("failed to initialize database");
 
-            app.manage(AppState::new(conn));
+            app.manage(AppState::new(conn, db_path));
             app.manage(Arc::new(VipKeyStore::new()));
             app.manage(Arc::new(SyncServerState::new()));
             commands::discovery::init(app);
@@ -126,6 +132,54 @@ pub fn run() {
             commands::p2p_sync::p2p_stop_sync_server,
             commands::p2p_sync::p2p_get_sync_status,
             commands::p2p_sync::p2p_export_for_sync,
+            // Git
+            commands::git::git_get_info,
+            // Command History
+            commands::history::history_add,
+            commands::history::history_list,
+            commands::history::history_search,
+            commands::history::history_clear,
+            // Biometric
+            commands::biometric::biometric_status,
+            commands::biometric::biometric_enable,
+            commands::biometric::biometric_disable,
+            commands::biometric::biometric_unlock,
+            // Sync
+            commands::sync::sync_status,
+            commands::sync::sync_configure,
+            commands::sync::sync_now,
+            commands::sync::sync_pause,
+            commands::sync::sync_resume,
+            // Team Vault
+            commands::team::team_create,
+            commands::team::team_list,
+            commands::team::team_delete,
+            commands::team::team_add_member,
+            commands::team::team_list_members,
+            commands::team::team_revoke_member,
+            commands::team::team_share_host,
+            commands::team::team_list_shares,
+            commands::team::team_remove_share,
+            // Plugin System
+            commands::plugin::plugin_list,
+            commands::plugin::plugin_install,
+            commands::plugin::plugin_uninstall,
+            commands::plugin::plugin_enable,
+            commands::plugin::plugin_disable,
+            commands::plugin::plugin_get_capabilities,
+            commands::plugin::plugin_grant_capability,
+            commands::plugin::plugin_revoke_capability,
+            commands::plugin::plugin_execute,
+            // Audit Log
+            commands::audit::audit_record,
+            commands::audit::audit_query,
+            commands::audit::audit_export,
+            commands::audit::audit_purge,
+            commands::audit::audit_get_settings,
+            commands::audit::audit_set_settings,
+            // Export/Import
+            commands::export::export_hosts_encrypted,
+            commands::export::import_hosts_encrypted,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

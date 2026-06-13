@@ -7,6 +7,7 @@ import type {
   ConnectByHostInput,
   QuickConnectInput,
   VaultStatus,
+  BiometricStatus,
 } from '@/types/ssh';
 import type {
   SftpFile,
@@ -30,6 +31,17 @@ import type {
   VerifyHostKeyInput,
   TrustHostKeyInput,
 } from '@/types/known-hosts';
+import type { SyncStatus, SyncConfigureInput, SyncResult } from '@/types/sync';
+import type {
+  Team,
+  TeamMember,
+  TeamShare,
+  CreateTeamInput,
+  AddMemberInput,
+  ShareHostInput,
+} from '@/types/team';
+import type { Plugin, PluginCapability } from '@/types/plugin';
+import type { AuditEvent, AuditSettings, AuditQuery } from '@/types/audit';
 
 /**
  * Typed wrappers around Tauri `invoke`.
@@ -169,5 +181,103 @@ export const tauri = {
   },
   app: {
     version: () => invoke<string>('app_version'),
+  },
+  git: {
+    getInfo: (path?: string) =>
+      invoke<{ branch: string | null; hasChanges: boolean; ahead: number; behind: number }>(
+        'git_get_info',
+        { path },
+      ),
+  },
+  history: {
+    add: (input: { sessionId: string; command: string; exitCode?: number; workingDir?: string }) =>
+      invoke<string>('history_add', { input }),
+    list: (sessionId?: string, limit?: number) =>
+      invoke<{ id: string; sessionId: string; command: string; exitCode: number | null; workingDir: string | null; executedAt: string }[]>(
+        'history_list',
+        { sessionId, limit },
+      ),
+    search: (query: string, limit?: number) =>
+      invoke<{ id: string; sessionId: string; command: string; exitCode: number | null; workingDir: string | null; executedAt: string }[]>(
+        'history_search',
+        { query, limit },
+      ),
+    clear: (sessionId?: string) =>
+      invoke<void>('history_clear', { sessionId }),
+  },
+  biometric: {
+    status: () => invoke<BiometricStatus>('biometric_status'),
+    enable: () => invoke<void>('biometric_enable'),
+    disable: () => invoke<void>('biometric_disable'),
+    unlock: () => invoke<void>('biometric_unlock'),
+  },
+  sync: {
+    status: () => invoke<SyncStatus>('sync_status'),
+    configure: (input: SyncConfigureInput) =>
+      invoke<void>('sync_configure', {
+        backendType: input.backendType,
+        endpointUrl: input.endpointUrl,
+        credentials: input.credentials,
+      }),
+    now: () => invoke<SyncResult>('sync_now'),
+    pause: () => invoke<void>('sync_pause'),
+    resume: () => invoke<void>('sync_resume'),
+  },
+  team: {
+    create: (input: CreateTeamInput) =>
+      invoke<Team>('team_create', { input }),
+    list: () => invoke<Team[]>('team_list'),
+    delete: (teamId: string) =>
+      invoke<void>('team_delete', { teamId }),
+    addMember: (input: AddMemberInput) =>
+      invoke<TeamMember>('team_add_member', { input }),
+    listMembers: (teamId: string) =>
+      invoke<TeamMember[]>('team_list_members', { teamId }),
+    revokeMember: (memberId: string) =>
+      invoke<void>('team_revoke_member', { memberId }),
+    shareHost: (input: ShareHostInput) =>
+      invoke<TeamShare>('team_share_host', { input }),
+    listShares: (teamId: string) =>
+      invoke<TeamShare[]>('team_list_shares', { teamId }),
+    removeShare: (shareId: string) =>
+      invoke<void>('team_remove_share', { shareId }),
+  },
+  plugin: {
+    list: () => invoke<Plugin[]>('plugin_list'),
+    install: (manifestJson: string, wasmPath: string) =>
+      invoke<Plugin>('plugin_install', { manifestJson, wasmPath }),
+    uninstall: (pluginId: string) =>
+      invoke<void>('plugin_uninstall', { pluginId }),
+    enable: (pluginId: string) =>
+      invoke<void>('plugin_enable', { pluginId }),
+    disable: (pluginId: string) =>
+      invoke<void>('plugin_disable', { pluginId }),
+    getCapabilities: (pluginId: string) =>
+      invoke<PluginCapability[]>('plugin_get_capabilities', { pluginId }),
+    grantCapability: (pluginId: string, capability: string) =>
+      invoke<void>('plugin_grant_capability', { pluginId, capability }),
+    revokeCapability: (pluginId: string, capability: string) =>
+      invoke<void>('plugin_revoke_capability', { pluginId, capability }),
+    execute: (pluginId: string) =>
+      invoke<string>('plugin_execute', { pluginId }),
+  },
+  audit: {
+    record: (eventType: string, payload: string, hostId?: string) =>
+      invoke<string>('audit_record', { eventType, hostId: hostId ?? null, payload }),
+    query: (filter: AuditQuery) =>
+      invoke<AuditEvent[]>('audit_query', { filter }),
+    export: (filter: AuditQuery) =>
+      invoke<string>('audit_export', { filter }),
+    purge: () => invoke<number>('audit_purge'),
+    getSettings: (hostId: string) =>
+      invoke<AuditSettings | null>('audit_get_settings', { hostId }),
+    setSettings: (settings: AuditSettings) =>
+      invoke<void>('audit_set_settings', { settings }),
+  },
+  export: {
+    hostsEncrypted: (password: string) =>
+      invoke<string>('export_hosts_encrypted', { exportPassword: password }),
+    importHostsEncrypted: (data: string, password: string) =>
+      invoke<number>('import_hosts_encrypted', { exportData: data, exportPassword: password }),
   },
 } as const;

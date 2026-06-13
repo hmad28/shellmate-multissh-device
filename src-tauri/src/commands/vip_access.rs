@@ -1,5 +1,6 @@
 use crate::errors::{AppError, AppResult};
 use crate::vault::Vault;
+use base64::Engine;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use parking_lot::Mutex;
 use rusqlite::Connection;
@@ -107,7 +108,11 @@ pub async fn vip_inject_authorized_keys(
         std::fs::create_dir_all(parent)?;
     }
 
-    let public_key_line = format!("ssh-ed25519 {} shellmate-vip", pubkey_hex);
+    // Convert hex-encoded key to base64 for authorized_keys format
+    let key_bytes = hex::decode(&pubkey_hex)
+        .map_err(|e| AppError::InvalidInput(format!("invalid hex public key: {e}")))?;
+    let pubkey_b64 = base64::engine::general_purpose::STANDARD.encode(&key_bytes);
+    let public_key_line = format!("ssh-ed25519 {} shellmate-vip", pubkey_b64);
 
     // Read existing authorized_keys
     let existing = std::fs::read_to_string(&key_path).unwrap_or_default();

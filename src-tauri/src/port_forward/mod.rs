@@ -32,6 +32,7 @@ pub enum PortForwardType {
 struct ActiveForward {
     rule: PortForwardRule,
     shutdown_tx: tokio::sync::oneshot::Sender<()>,
+    enabled: Arc<tokio::sync::RwLock<bool>>,
 }
 
 pub struct PortForwardManager {
@@ -91,6 +92,8 @@ impl PortForwardManager {
             })?;
 
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+        let enabled = Arc::new(tokio::sync::RwLock::new(true));
+        let enabled_for_task = enabled.clone();
 
         let rule_for_task = rule.clone();
         let handle_for_task = handle;
@@ -99,6 +102,10 @@ impl PortForwardManager {
             loop {
                 tokio::select! {
                     accept_result = listener.accept() => {
+                        // Skip connections when disabled
+                        if !*enabled_for_task.read().await {
+                            continue;
+                        }
                         match accept_result {
                             Ok((mut local_stream, _)) => {
                                 let handle = handle_for_task.clone();
@@ -144,6 +151,7 @@ impl PortForwardManager {
             ActiveForward {
                 rule: rule.clone(),
                 shutdown_tx,
+                enabled,
             },
         );
 
@@ -169,14 +177,21 @@ impl PortForwardManager {
         }
     }
 
-    pub fn toggle_forward(&self, forward_id: &str) -> AppResult<PortForwardRule> {
-        let mut forwards = self.forwards.lock();
-        let active = forwards
-            .get_mut(forward_id)
-            .ok_or_else(|| AppError::NotFound(format!("forward {}", forward_id)))?;
+    pub async fn toggle_forward(&self, forward_id: &str) -> AppResult<PortForwardRule> {
+        let (enabled_val, enabled_arc, rule) = {
+            let mut forwards = self.forwards.lock();
+            let active = forwards
+                .get_mut(forward_id)
+                .ok_or_else(|| AppError::NotFound(format!("forward {}", forward_id)))?;
+            
+            active.rule.enabled = !active.rule.enabled;
+            (active.rule.enabled, active.enabled.clone(), active.rule.clone())
+        };
         
-        active.rule.enabled = !active.rule.enabled;
-        Ok(active.rule.clone())
+        // Update the shared enabled flag so the spawned task respects it
+        *enabled_arc.write().await = enabled_val;
+        
+        Ok(rule)
     }
 
     pub fn cleanup_session(&self, session_id: &str) {

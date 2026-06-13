@@ -8,6 +8,7 @@ import { PortForwardPanel } from '@/components/port-forward/PortForwardPanel';
 import { BroadcastModePanel } from '@/components/terminal/BroadcastModePanel';
 import { VipAccessPanel } from '@/components/vip/VipAccessPanel';
 import { P2pSyncPanel } from '@/components/sync/P2pSyncPanel';
+import { CommandHistoryPanel } from '@/components/history/CommandHistoryPanel';
 import { Terminal } from '@/components/terminal/Terminal';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
@@ -34,12 +35,14 @@ export function ContentArea() {
   const [snippetOpen, setSnippetOpen] = useState(false);
   const [vipOpen, setVipOpen] = useState(false);
   const [p2pOpen, setP2pOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     if (activePanel === 'settings') setSettingsOpen(true);
     if (activePanel === 'snippets') setSnippetOpen(true);
     if (activePanel === 'vip-access') setVipOpen(true);
     if (activePanel === 'p2p-sync') setP2pOpen(true);
+    if (activePanel === 'history') setHistoryOpen(true);
   }, [activePanel]);
 
   const isHosts = activePanel === 'hosts';
@@ -108,6 +111,16 @@ export function ContentArea() {
         }}
       >
         <P2pSyncPanel />
+      </PopupDialog>
+      <PopupDialog
+        open={historyOpen}
+        title="Command History"
+        onClose={() => {
+          setHistoryOpen(false);
+          if (activePanel === 'history') setActivePanel('hosts');
+        }}
+      >
+        <CommandHistoryPanel onClose={() => setActivePanel('hosts')} />
       </PopupDialog>
     </>
   );

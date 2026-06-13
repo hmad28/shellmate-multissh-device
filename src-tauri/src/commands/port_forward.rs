@@ -69,5 +69,5 @@ pub async fn port_forward_toggle(
     input: PortForwardIdInput,
 ) -> AppResult<PortForwardRule> {
     let mgr = Arc::clone(&state.port_forward);
-    mgr.toggle_forward(&input.forward_id)
+    mgr.toggle_forward(&input.forward_id).await
 }

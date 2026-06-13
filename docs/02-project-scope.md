@@ -28,10 +28,10 @@ The product runs on Windows, macOS, Linux, Android, and iOS (Tauri v2 mobile). O
 | Metric | Target |
 |--------|--------|
 | Cold start time | < 2s desktop, < 3s mobile |
-| Memory usage (idle, desktop) | < 80 MB |
-| Memory usage (5 tabs, desktop) | < 150 MB |
+| Memory usage (idle, desktop) | < 50 MB |
+| Memory usage (5 tabs, desktop) | < 100 MB |
 | SSH connection time | < 1s after vault unlocked |
-| Desktop binary size | < 30 MB installer |
+| Desktop binary size | < 20 MB installer |
 | Mobile binary size | < 25 MB |
 | Frontend bundle | < 500 KB gzipped |
 | WCAG | 2.1 AA on UI chrome |
@@ -50,7 +50,7 @@ ShellMate v1.0 ships as a complete production release. All items below are requi
 - **Broadcast mode** — send command to multiple selected sessions
 - SSH keepalive + auto-reconnect with exponential backoff
 - Known hosts management with TOFU + warning on key mismatch
-- **Mosh support** — UDP SSP fallback for unreliable networks (mobile-critical)
+- **Mosh support** (Phase 14) — UDP SSP fallback for unreliable networks (mobile-critical)
 
 ### 3.2 Host & Organization
 - Host CRUD with validation
@@ -225,7 +225,7 @@ Acceptance Criteria:
 | Styling | Tailwind CSS 3 + shadcn/ui | accessible by default |
 | Terminal | xterm.js | with FitAddon, SearchAddon, WebLinksAddon |
 | SSH | russh (Rust) | memory-safe |
-| Mosh | Rust port (Phase 6) | UDP SSP |
+| Mosh | Rust port (Phase 14) | UDP SSP |
 | Database | SQLite + SQLCipher (Phase 7) | full-DB encryption |
 | Encryption | AES-256-GCM + Argon2id | per-credential layer + DB layer |
 | Plugin Runtime | Wasmtime (Phase 12) | sandboxed WASM |
@@ -338,7 +338,7 @@ ShellMate v1.0 is delivered **scope-driven** — no fixed deadlines. Each phase 
 | 3 | ✅ Complete (2026-06-10) | Host Management & Persistence |
 | 4 | ✅ Complete (2026-06-10) | Productivity & Settings (snippets, themes, shortcuts) |
 | 5 | ✅ Complete (2026-06-10) | File Transfer & Network (SFTP, port forward) |
-| 6 | ✅ Complete (2026-06-10) | Network Hardening (known hosts, Mosh, broadcast) |
+| 6 | ✅ Complete (2026-06-10) | Network Hardening (known hosts, broadcast, auto-reconnect; Mosh deferred to Phase 14) |
 | 7 | ⏳ Pending | Full-DB Encryption (SQLCipher migration) |
 | 8 | ⏳ Pending | Biometric Unlock |
 | 9 | ⏳ Pending | Multi-Device Sync (E2E) |
@@ -357,7 +357,7 @@ See `docs/01-development-plan.md` for detailed deliverables per phase.
 ### 12.1 Functional
 - [ ] Add/edit/delete/group/search hosts with drag-and-drop
 - [ ] Connect to many SSH servers simultaneously, broadcast to multiple
-- [ ] Mosh fallback for unreliable networks
+- [ ] Mosh fallback for unreliable networks (Phase 14)
 - [ ] Credentials encrypted at rest (per-cred + full-DB)
 - [ ] Biometric unlock works on all target platforms
 - [ ] Sync works across desktop and mobile

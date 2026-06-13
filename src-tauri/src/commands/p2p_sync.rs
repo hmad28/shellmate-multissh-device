@@ -1,16 +1,22 @@
 use crate::errors::{AppError, AppResult};
 use crate::vault::Vault;
 use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+use argon2::Argon2;
 use base64::Engine;
 use parking_lot::Mutex;
 use rand::Rng;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
+
+const MAX_PIN_ATTEMPTS: usize = 10;
+const RATE_LIMIT_WINDOW_SECS: u64 = 60;
 
 pub struct SyncServerState {
     inner: Mutex<SyncServerInner>,
@@ -20,6 +26,7 @@ struct SyncServerInner {
     shutdown_tx: Option<oneshot::Sender<()>>,
     pin: Option<String>,
     is_running: bool,
+    failed_attempts: HashMap<std::net::IpAddr, (u32, Instant)>,
 }
 
 impl SyncServerState {
@@ -29,6 +36,7 @@ impl SyncServerState {
                 shutdown_tx: None,
                 pin: None,
                 is_running: false,
+                failed_attempts: HashMap::new(),
             }),
         }
     }
@@ -100,15 +108,12 @@ fn generate_pin() -> String {
     format!("{:06}", rng.gen_range(0..1_000_000))
 }
 
-fn derive_key_from_pin(pin: &str) -> [u8; 32] {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(b"shellmate-sync-v1");
-    hasher.update(pin.as_bytes());
-    let result = hasher.finalize();
+fn derive_key_from_pin(pin: &str, salt: &[u8]) -> AppResult<[u8; 32]> {
     let mut key = [0u8; 32];
-    key.copy_from_slice(&result);
-    key
+    Argon2::default()
+        .hash_password_into(pin.as_bytes(), salt, &mut key)
+        .map_err(|e| AppError::Internal(format!("key derivation failed: {e}")))?;
+    Ok(key)
 }
 
 fn encrypt_payload(key: &[u8; 32], plaintext: &[u8]) -> AppResult<Vec<u8>> {
@@ -152,6 +157,8 @@ async fn handle_sync_receive(
     db: &Arc<Mutex<Connection>>,
     _vault: &Arc<Vault>,
     app: &AppHandle,
+    peer_addr: Option<std::net::SocketAddr>,
+    server_state: &SyncServerState,
 ) {
     let request_str = String::from_utf8_lossy(raw_request);
     let body_start = request_str.find("\r\n\r\n").unwrap_or(0) + 4;
@@ -167,12 +174,28 @@ async fn handle_sync_receive(
     };
 
     if req.pin != expected_pin {
+        // Track failed attempt
+        if let Some(addr) = peer_addr {
+            let mut inner = server_state.inner.lock();
+            let now = Instant::now();
+            let entry = inner.failed_attempts.entry(addr.ip()).or_insert((0, now));
+            entry.0 += 1;
+            entry.1 = now;
+        }
         let response = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n";
         let _ = stream.write_all(response.as_bytes()).await;
         return;
     }
 
-    let key = derive_key_from_pin(&req.pin);
+    let salt = b"shellmate-sync-argon2id-salt-v1";
+    let key = match derive_key_from_pin(&req.pin, salt) {
+        Ok(k) => k,
+        Err(_) => {
+            let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
+            let _ = stream.write_all(response.as_bytes()).await;
+            return;
+        }
+    };
     let decrypted = match decrypt_payload(&key, &req.payload) {
         Ok(d) => d,
         Err(_) => {
@@ -356,7 +379,7 @@ async fn run_server(
     server_state: Arc<SyncServerState>,
     mut shutdown_rx: oneshot::Receiver<()>,
 ) {
-    let listener = TcpListener::bind("0.0.0.0:0").await;
+    let listener = TcpListener::bind("127.0.0.1:0").await;
     let listener = match listener {
         Ok(l) => l,
         Err(e) => {
@@ -389,8 +412,28 @@ async fn run_server(
                         let db = db.clone();
                         let vault = vault.clone();
                         let pin = pin.clone();
+                        let server_state_ref = server_state.clone();
 
                         tokio::spawn(async move {
+                            let peer_addr = stream.peer_addr().ok();
+
+                            // Rate limit check
+                            if let Some(addr) = peer_addr {
+                                let should_block = {
+                                    let mut inner = server_state_ref.inner.lock();
+                                    let now = Instant::now();
+                                    let entry = inner.failed_attempts.entry(addr.ip()).or_insert((0, now));
+                                    if now.duration_since(entry.1).as_secs() > RATE_LIMIT_WINDOW_SECS {
+                                        *entry = (0, now);
+                                    }
+                                    entry.0 >= MAX_PIN_ATTEMPTS as u32
+                                };
+                                if should_block {
+                                    let response = "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\n\r\n";
+                                    let _ = stream.write_all(response.as_bytes()).await;
+                                    return;
+                                }
+                            }
                             let mut buf = vec![0u8; 65536];
                             let n = match stream.read(&mut buf).await {
                                 Ok(n) if n > 0 => n,
@@ -422,6 +465,8 @@ async fn run_server(
                                         &db,
                                         &vault,
                                         &app,
+                                        peer_addr,
+                                        &server_state_ref,
                                     ).await;
                                 }
                                 _ => {

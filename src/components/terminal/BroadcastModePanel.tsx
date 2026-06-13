@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { useBroadcastStore } from '@/stores/broadcast-store';
 import { useTabStore } from '@/stores/tab-store';
+import { useSshStore } from '@/stores/ssh-store';
 
 interface BroadcastModePanelProps {
   onClose: () => void;
@@ -12,6 +13,7 @@ interface BroadcastModePanelProps {
 
 export function BroadcastModePanel({ onClose }: BroadcastModePanelProps) {
   const { tabs } = useTabStore();
+  const { sessionByTab } = useSshStore();
   const {
     broadcastSessions,
     addSession,
@@ -69,7 +71,9 @@ export function BroadcastModePanel({ onClose }: BroadcastModePanelProps) {
           </h3>
           <div className="space-y-2">
             {tabs.map((tab) => {
-              const isActive = isSessionActive(tab.id);
+              const sessionId = sessionByTab[tab.id];
+              if (!sessionId) return null;
+              const isActive = isSessionActive(sessionId);
               return (
                 <label
                   key={tab.id}
@@ -83,13 +87,13 @@ export function BroadcastModePanel({ onClose }: BroadcastModePanelProps) {
                   <input
                     type="checkbox"
                     checked={isActive}
-                    onChange={() => toggleSession(tab.id)}
+                    onChange={() => toggleSession(sessionId)}
                     className="rounded border-border"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm text-fg">{tab.label}</div>
                     <div className="truncate text-xs text-fg-muted">
-                      {tab.id}
+                      {sessionId}
                     </div>
                   </div>
                   {isActive && (

@@ -96,7 +96,7 @@ echo "  npm run tauri:dev"
        │                    │                    │
        │ 1. Git clone       │                    │
        │───────────────────>│                    │
-       │                    │ 2. bun install     │
+       │                    │ 2. npm install     │
        │                    │ 3. cargo build     │
        │                    │ 4. tauri build     │
        │                    │───────────────────>│
@@ -110,19 +110,19 @@ echo "  npm run tauri:dev"
 ### 2.3 Platform-Specific Builds
 ```bash
 # Windows
-bun run build:tauri:win
+npm run build:tauri:win
 
 # macOS (Apple Silicon)
-bun run build:tauri:mac-arm
+npm run build:tauri:mac-arm
 
 # macOS (Intel)
-bun run build:tauri:mac-x64
+npm run build:tauri:mac-x64
 
 # Linux
-bun run build:tauri:linux
+npm run build:tauri:linux
 
 # Debug build (faster compilation)
-bun run build:tauri:debug
+npm run build:tauri:debug
 ```
 
 ---
@@ -197,9 +197,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
           
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -509,7 +506,7 @@ Every release includes:
 ### 12.3 Tooling
 ```bash
 # Install
-bun add -D @axe-core/react vitest-axe
+npm install -D @axe-core/react vitest-axe
 
 # Example test (vitest)
 import { render } from '@testing-library/react';
@@ -553,7 +550,7 @@ it('host form has no a11y violations', async () => {
     fi
 
 - name: Check frontend bundle size
-  run: bun run build && bunx vite-bundle-visualizer --output dist/stats.html
+  run: npm run build && npx vite-bundle-visualizer --output dist/stats.html
 ```
 
 ### 13.3 Profiling Tools

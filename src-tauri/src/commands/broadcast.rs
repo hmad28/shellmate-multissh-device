@@ -1,3 +1,4 @@
+use crate::errors::AppResult;
 use crate::state::AppState;
 use tauri::State;
 
@@ -5,7 +6,7 @@ use tauri::State;
 pub async fn broadcast_add(
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     state.broadcast.add_to_broadcast(&session_id);
     Ok(())
 }
@@ -14,7 +15,7 @@ pub async fn broadcast_add(
 pub async fn broadcast_remove(
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     state.broadcast.remove_from_broadcast(&session_id);
     Ok(())
 }
@@ -23,12 +24,12 @@ pub async fn broadcast_remove(
 pub async fn broadcast_is_active(
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     Ok(state.broadcast.is_broadcasting(&session_id))
 }
 
 #[tauri::command]
-pub async fn broadcast_get_sessions(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+pub async fn broadcast_get_sessions(state: State<'_, AppState>) -> AppResult<Vec<String>> {
     Ok(state.broadcast.get_broadcast_sessions())
 }
 
@@ -37,9 +38,9 @@ pub async fn broadcast_send(
     state: State<'_, AppState>,
     session_id: String,
     data: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     state
         .broadcast
         .broadcast_input(&session_id, data.into_bytes())
-        .map_err(|e| e.to_string())
+        .map_err(|e| crate::errors::AppError::Internal(e.to_string()))
 }

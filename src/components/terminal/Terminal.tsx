@@ -6,6 +6,9 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import '@xterm/xterm/css/xterm.css';
 import { tauri } from '@/lib/tauri';
 import { useTabStore } from '@/stores/tab-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { MobileKeyBar } from './MobileKeyBar';
 import type {
   SshOutputEvent,
   SshStatusEvent,
@@ -35,24 +38,34 @@ export function Terminal({ tabId, sessionId }: TerminalProps) {
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const updateTabStatus = useTabStore((s) => s.updateTabStatus);
+  const isMobile = useIsMobile();
+
+  const handleMobileKey = (data: string) => {
+    if (termRef.current) {
+      void tauri.ssh.send(sessionId, data);
+    }
+  };
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    const { settings } = useSettingsStore.getState();
+    const themeDef = useSettingsStore.getState().resolveTheme(settings.themeId);
+
     const term = new XTerm({
-      cursorBlink: true,
-      cursorStyle: 'block',
+      cursorBlink: settings.cursorBlink,
+      cursorStyle: settings.cursorStyle,
       fontFamily: 'JetBrains Mono, Fira Code, Consolas, Monaco, monospace',
-      fontSize: 14,
+      fontSize: settings.fontSize,
       lineHeight: 1.4,
-      scrollback: 5000,
+      scrollback: settings.scrollback,
       theme: {
-        background: '#0a0a0f',
-        foreground: '#e8e8ea',
-        cursor: '#3b82f6',
-        cursorAccent: '#0a0a0f',
-        selectionBackground: '#1e3a8a',
+        background: themeDef.terminal.background,
+        foreground: themeDef.terminal.foreground,
+        cursor: themeDef.terminal.cursor,
+        cursorAccent: themeDef.terminal.cursorAccent,
+        selectionBackground: themeDef.terminal.selectionBackground,
       },
     });
 
@@ -128,8 +141,9 @@ export function Terminal({ tabId, sessionId }: TerminalProps) {
   }, [sessionId, tabId, updateTabStatus]);
 
   return (
-    <div className={cn('h-full w-full bg-bg p-2')}>
-      <div ref={containerRef} className="h-full w-full" aria-label="Terminal" />
+    <div className={cn('flex h-full w-full flex-col bg-bg', isMobile ? '' : 'p-2')}>
+      <div ref={containerRef} className="min-h-0 flex-1" aria-label="Terminal" />
+      {isMobile && <MobileKeyBar onSend={handleMobileKey} />}
     </div>
   );
 }

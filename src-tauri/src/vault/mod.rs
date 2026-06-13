@@ -19,13 +19,14 @@ const VERIFIER_PLAINTEXT: &[u8] = b"shellmate.vault.v1";
 
 const DEFAULT_AUTOLOCK_SECS: u64 = 15 * 60;
 
-/// In-memory vault state. Holds the derived key only while unlocked.
+/// In-memory vault state. Holds the derived keys only while unlocked.
 pub struct Vault {
     inner: RwLock<VaultInner>,
 }
 
 struct VaultInner {
     key: Option<[u8; 32]>,
+    db_key: Option<[u8; 32]>,
     last_activity: Instant,
     autolock: Duration,
 }
@@ -35,6 +36,7 @@ impl Vault {
         Self {
             inner: RwLock::new(VaultInner {
                 key: None,
+                db_key: None,
                 last_activity: Instant::now(),
                 autolock: Duration::from_secs(DEFAULT_AUTOLOCK_SECS),
             }),
@@ -43,6 +45,11 @@ impl Vault {
 
     pub fn is_unlocked(&self) -> bool {
         self.inner.read().key.is_some()
+    }
+
+    /// Returns the DB key if the vault is unlocked, None otherwise.
+    pub fn get_db_key(&self) -> Option<[u8; 32]> {
+        self.inner.read().db_key
     }
 
     pub fn record_activity(&self) {
@@ -60,6 +67,9 @@ impl Vault {
             if let Some(mut key) = inner.key.take() {
                 key.zeroize();
             }
+            if let Some(mut db_key) = inner.db_key.take() {
+                db_key.zeroize();
+            }
             true
         } else {
             false
@@ -71,11 +81,30 @@ impl Vault {
         if let Some(mut key) = inner.key.take() {
             key.zeroize();
         }
+        if let Some(mut db_key) = inner.db_key.take() {
+            db_key.zeroize();
+        }
     }
 
     pub fn set_autolock(&self, secs: u64) {
         let mut inner = self.inner.write();
         inner.autolock = Duration::from_secs(secs);
+    }
+
+    /// Unlock the vault directly with a derived key (used by biometric unlock).
+    /// The key must be the vault key (not the master key). The db_key is derived
+    /// from the same master key via HKDF.
+    pub fn unlock_with_key(&self, master_key: &[u8; 32]) -> AppResult<()> {
+        let (vault_key, db_key) = crypto::derive_vault_and_db_keys(master_key);
+        let mut inner = self.inner.write();
+        if let Some(mut prev) = inner.key.replace(vault_key) {
+            prev.zeroize();
+        }
+        if let Some(mut prev) = inner.db_key.replace(db_key) {
+            prev.zeroize();
+        }
+        inner.last_activity = Instant::now();
+        Ok(())
     }
 
     /// Returns true if a vault has already been initialized in the given DB.
@@ -86,15 +115,18 @@ impl Vault {
 
     /// Initialize the vault for the first time. Stores the salt and a verifier
     /// ciphertext. The derived key is held in memory (vault becomes unlocked).
-    pub fn setup(&self, conn: &Connection, password: &str) -> AppResult<()> {
+    /// Returns the DB key for SQLCipher encryption.
+    pub fn setup(&self, conn: &Connection, password: &str) -> AppResult<[u8; 32]> {
         if Self::is_initialized(conn)? {
             return Err(AppError::InvalidInput("vault already initialized".into()));
         }
         validate_password(password)?;
 
         let salt = crypto::generate_salt();
-        let mut key = crypto::derive_key(password.as_bytes(), &salt)?;
-        let verifier = crypto::encrypt(&key, VERIFIER_PLAINTEXT)?;
+        let mut master_key = crypto::derive_key(password.as_bytes(), &salt)?;
+        let (vault_key, db_key) = crypto::derive_vault_and_db_keys(&master_key);
+        master_key.zeroize();
+        let verifier = crypto::encrypt(&vault_key, VERIFIER_PLAINTEXT)?;
 
         set_setting(conn, SETTING_VAULT_SALT, &hex(&salt))?;
         set_setting(
@@ -111,16 +143,14 @@ impl Vault {
         set_setting(conn, SETTING_VAULT_INITIALIZED, "1")?;
 
         let mut inner = self.inner.write();
-        inner.key = Some(key);
+        inner.key = Some(vault_key);
+        inner.db_key = Some(db_key);
         inner.last_activity = Instant::now();
-        // `key` is now owned by inner — local binding shadowed; zeroize to be safe.
-        key = [0u8; 32];
-        let _ = key;
-        Ok(())
+        Ok(db_key)
     }
 
-    /// Try to unlock the vault using `password`. Returns Ok(()) on success.
-    pub fn unlock(&self, conn: &Connection, password: &str) -> AppResult<()> {
+    /// Try to unlock the vault using `password`. Returns the DB key on success.
+    pub fn unlock(&self, conn: &Connection, password: &str) -> AppResult<[u8; 32]> {
         if !Self::is_initialized(conn)? {
             return Err(AppError::InvalidInput("vault not initialized".into()));
         }
@@ -136,28 +166,32 @@ impl Vault {
         let nonce = unhex_fixed::<NONCE_LEN>(&nonce_hex)?;
         let ciphertext = unhex(&ct_hex)?;
 
-        let mut key = crypto::derive_key(password.as_bytes(), &salt)?;
+        let mut master_key = crypto::derive_key(password.as_bytes(), &salt)?;
+        let (mut vault_key, mut db_key) = crypto::derive_vault_and_db_keys(&master_key);
+        // Zeroize master key immediately — only vault_key and db_key are needed.
+        master_key.zeroize();
+
         let blob = EncryptedBlob { ciphertext, nonce };
-        let plaintext = match crypto::decrypt(&key, &blob) {
+        let plaintext = match crypto::decrypt(&vault_key, &blob) {
             Ok(p) => p,
             Err(_) => {
-                key.zeroize();
+                vault_key.zeroize();
+                db_key.zeroize();
                 return Err(AppError::InvalidInput("incorrect master password".into()));
             }
         };
 
         // Constant-time compare to defeat any plaintext-shape side channel.
         if plaintext.ct_eq(VERIFIER_PLAINTEXT).unwrap_u8() != 1 {
-            key.zeroize();
+            vault_key.zeroize();
+            db_key.zeroize();
             return Err(AppError::InvalidInput("incorrect master password".into()));
         }
 
         let mut inner = self.inner.write();
-        inner.key = Some(key);
+        inner.key = Some(vault_key);
+        inner.db_key = Some(db_key);
         inner.last_activity = Instant::now();
-        // local key already moved into inner; reset binding for safety
-        key = [0u8; 32];
-        let _ = key;
 
         // Refresh autolock from settings (in case user changed it).
         if let Ok(Some(s)) = get_setting(conn, SETTING_VAULT_AUTOLOCK_SECS) {
@@ -165,7 +199,7 @@ impl Vault {
                 inner.autolock = Duration::from_secs(secs);
             }
         }
-        Ok(())
+        Ok(db_key)
     }
 
     /// Encrypt `plaintext` using the unlocked vault key.
@@ -212,26 +246,30 @@ impl Vault {
         let current_nonce = unhex_fixed::<NONCE_LEN>(&nonce_hex)?;
         let current_ciphertext = unhex(&ct_hex)?;
 
-        let mut current_key = crypto::derive_key(current_password.as_bytes(), &current_salt)?;
+        let mut current_master_key = crypto::derive_key(current_password.as_bytes(), &current_salt)?;
+        let (mut current_vault_key, _current_db_key) = crypto::derive_vault_and_db_keys(&current_master_key);
+        current_master_key.zeroize();
         let blob = EncryptedBlob {
             ciphertext: current_ciphertext,
             nonce: current_nonce,
         };
-        let plaintext = match crypto::decrypt(&current_key, &blob) {
+        let plaintext = match crypto::decrypt(&current_vault_key, &blob) {
             Ok(p) => p,
             Err(_) => {
-                current_key.zeroize();
+                current_vault_key.zeroize();
                 return Err(AppError::InvalidInput("incorrect current password".into()));
             }
         };
         if plaintext.ct_eq(VERIFIER_PLAINTEXT).unwrap_u8() != 1 {
-            current_key.zeroize();
+            current_vault_key.zeroize();
             return Err(AppError::InvalidInput("incorrect current password".into()));
         }
 
         // Derive new key with fresh salt.
         let new_salt = crypto::generate_salt();
-        let mut new_key = crypto::derive_key(new_password.as_bytes(), &new_salt)?;
+        let mut new_master_key = crypto::derive_key(new_password.as_bytes(), &new_salt)?;
+        let (mut new_vault_key, mut new_db_key) = crypto::derive_vault_and_db_keys(&new_master_key);
+        new_master_key.zeroize();
 
         // Atomically:
         //   1. Re-encrypt every credential (encrypted_data + nonce columns)
@@ -256,8 +294,9 @@ impl Vault {
         let now = chrono::Utc::now().to_rfc3339();
         for (id, ct, nonce_bytes) in credentials {
             if nonce_bytes.len() != NONCE_LEN {
-                current_key.zeroize();
-                new_key.zeroize();
+                current_vault_key.zeroize();
+                new_vault_key.zeroize();
+                new_db_key.zeroize();
                 return Err(AppError::Internal(format!(
                     "credential {id} has invalid nonce length"
                 )));
@@ -265,21 +304,23 @@ impl Vault {
             let mut nonce = [0u8; NONCE_LEN];
             nonce.copy_from_slice(&nonce_bytes);
             let blob = EncryptedBlob { ciphertext: ct, nonce };
-            let plaintext = match crypto::decrypt(&current_key, &blob) {
+            let plaintext = match crypto::decrypt(&current_vault_key, &blob) {
                 Ok(p) => p,
                 Err(_) => {
-                    current_key.zeroize();
-                    new_key.zeroize();
+                    current_vault_key.zeroize();
+                    new_vault_key.zeroize();
+                    new_db_key.zeroize();
                     return Err(AppError::Internal(format!(
                         "failed to decrypt credential {id} during rotation"
                     )));
                 }
             };
-            let new_blob = match crypto::encrypt(&new_key, &plaintext) {
+            let new_blob = match crypto::encrypt(&new_vault_key, &plaintext) {
                 Ok(b) => b,
                 Err(e) => {
-                    current_key.zeroize();
-                    new_key.zeroize();
+                    current_vault_key.zeroize();
+                    new_vault_key.zeroize();
+                    new_db_key.zeroize();
                     return Err(e);
                 }
             };
@@ -293,11 +334,12 @@ impl Vault {
         }
 
         // Re-encrypt verifier with new key
-        let new_verifier = match crypto::encrypt(&new_key, VERIFIER_PLAINTEXT) {
+        let new_verifier = match crypto::encrypt(&new_vault_key, VERIFIER_PLAINTEXT) {
             Ok(b) => b,
             Err(e) => {
-                current_key.zeroize();
-                new_key.zeroize();
+                current_vault_key.zeroize();
+                new_vault_key.zeroize();
+                new_db_key.zeroize();
                 return Err(e);
             }
         };
@@ -327,14 +369,16 @@ impl Vault {
 
         tx.commit()?;
 
-        // Swap in-memory key
+        // Swap in-memory keys
         let mut inner = self.inner.write();
-        if let Some(mut prev) = inner.key.replace(new_key) {
+        if let Some(mut prev) = inner.key.replace(new_vault_key) {
+            prev.zeroize();
+        }
+        if let Some(mut prev) = inner.db_key.replace(new_db_key) {
             prev.zeroize();
         }
         inner.last_activity = Instant::now();
-        // Local copy zeroized on drop via stack out-of-scope; new_key was moved into inner.
-        current_key.zeroize();
+        current_vault_key.zeroize();
 
         Ok(())
     }

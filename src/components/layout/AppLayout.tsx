@@ -4,12 +4,15 @@ import { tauri } from '@/lib/tauri';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
 import { useUiStore } from '@/stores/ui-store';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { HostKeyVerificationDialog } from '@/components/security/HostKeyVerificationDialog';
 import { Sidebar } from './Sidebar';
 import { TabBar } from './TabBar';
 import { TitleBar } from './TitleBar';
 import { StatusBar } from './StatusBar';
 import { ContentArea } from './ContentArea';
+import { MobileLayout } from './MobileLayout';
+import { ToastContainer } from '@/components/ui/Toast';
 
 interface PendingVerification {
   sessionId: string;
@@ -23,6 +26,16 @@ interface PendingVerification {
 }
 
 export function AppLayout() {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return <MobileLayout />;
+  }
+
+  return <DesktopLayout />;
+}
+
+function DesktopLayout() {
   const [pendingVerification, setPendingVerification] =
     useState<PendingVerification | null>(null);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
@@ -126,6 +139,7 @@ export function AppLayout() {
           onReject={handleReject}
         />
       )}
+      <ToastContainer />
     </div>
   );
 }

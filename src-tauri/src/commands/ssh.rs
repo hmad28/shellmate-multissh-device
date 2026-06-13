@@ -32,6 +32,7 @@ pub struct QuickConnectInput {
     pub username: String,
     pub label: Option<String>,
     pub auth: QuickConnectAuth,
+    pub shell: Option<String>,
 }
 
 /// Open an SSH session for a saved host. Decrypts the credential via the
@@ -103,6 +104,7 @@ pub async fn ssh_connect(
         username,
         auth,
         label: Some(label),
+        shell: None,
     };
 
     let mgr = Arc::clone(&state.ssh);
@@ -134,6 +136,7 @@ pub async fn ssh_quick_connect(
         username: input.username,
         auth,
         label: input.label,
+        shell: input.shell,
     };
     let mgr = Arc::clone(&state.ssh);
     mgr.open(app, params).await

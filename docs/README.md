@@ -87,6 +87,7 @@ ShellMate v1.0 is a **production release**, not an MVP. Scope spans 14 phases de
 | 5 | Complete (2026-06-10) | File Transfer & Network (SFTP, port forward) |
 | 6 | Complete (2026-06-10) | Network Hardening (known hosts, broadcast, auto-reconnect; Mosh deferred to Phase 14) |
 | - | Complete (2026-06-11) | Phase 1–6 Integration & Stabilization |
+| - | Complete (2026-06-13) | Termul feature parity: Error Boundaries, Command Palette, Shortcuts, Git, Shell, History, Updater |
 | 7 | Pending | Full-DB Encryption (SQLCipher) |
 | 8 | Pending | Biometric Unlock |
 | 9 | Pending | Multi-Device Sync (E2E) |
