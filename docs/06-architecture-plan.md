@@ -2,7 +2,7 @@
 ## ShellMate — System Architecture (v1.0 Production)
 
 **Version:** 2.3
-**Last Updated:** 2026-06-11
+**Last Updated:** 2026-06-13
 
 ---
 

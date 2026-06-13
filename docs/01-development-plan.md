@@ -2,7 +2,7 @@
 ## ShellMate — SSH Client (Production v1.0)
 
 **Version:** 2.3
-**Last Updated:** 2026-06-11
+**Last Updated:** 2026-06-13
 **Approach:** Scope-driven phases, no fixed timeline — each phase ships when acceptance criteria are met.
 
 ---

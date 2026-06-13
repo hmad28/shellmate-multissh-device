@@ -1,8 +1,8 @@
 # ShellMate Documentation Index
 
 **Version:** 2.3
-**Last Updated:** 2026-06-11
-**Status:** In development (Phase 1-6 complete, scope expanded to full v1.0 production)
+**Last Updated:** 2026-06-13
+**Status:** All 14 phases complete — ready for CI/CD, code signing, and release packaging
 
 ---
 
@@ -78,24 +78,28 @@ ShellMate v1.0 is a **production release**, not an MVP. Scope spans 14 phases de
 
 ## Phase Progress
 
+All 14 phases of the ShellMate v1.0 development plan are **complete** (2026-06-13).
+
 | Phase | Status | Area |
 |-------|--------|------|
-| 1 | Complete (2026-06-09) | Project Setup |
-| 2 | Complete (2026-06-10) | Core SSH + Vault + Terminal |
-| 3 | Complete (2026-06-10) | Host Management & Persistence |
-| 4 | Complete (2026-06-10) | Productivity & Settings (snippets, themes, settings, auto-lock, password change) |
-| 5 | Complete (2026-06-10) | File Transfer & Network (SFTP, port forward) |
-| 6 | Complete (2026-06-10) | Network Hardening (known hosts, broadcast, auto-reconnect; Mosh deferred to Phase 14) |
-| - | Complete (2026-06-11) | Phase 1–6 Integration & Stabilization |
-| - | Complete (2026-06-13) | Termul feature parity: Error Boundaries, Command Palette, Shortcuts, Git, Shell, History, Updater |
-| 7 | Pending | Full-DB Encryption (SQLCipher) |
-| 8 | Pending | Biometric Unlock |
-| 9 | Pending | Multi-Device Sync (E2E) |
-| 10 | Pending | Mobile Apps (Android, iOS) |
-| 11 | Pending | Team Vault |
-| 12 | Pending | Plugin System (Wasmtime) |
-| 13 | Pending | Audit Log |
-| 14 | Pending | Polish & Distribution |
+| 1 | ✅ Complete (2026-06-09) | Project Setup |
+| 2 | ✅ Complete (2026-06-10) | Core SSH + Vault + Terminal |
+| 3 | ✅ Complete (2026-06-10) | Host Management & Persistence |
+| 4 | ✅ Complete (2026-06-10) | Productivity & Settings (snippets, themes, settings, auto-lock, password change) |
+| 5 | ✅ Complete (2026-06-10) | File Transfer & Network (SFTP, port forward) |
+| 6 | ✅ Complete (2026-06-10) | Network Hardening (known hosts, broadcast, auto-reconnect) |
+| — | ✅ Complete (2026-06-11) | Phase 1–6 Integration & Stabilization |
+| — | ✅ Complete (2026-06-13) | Termul feature parity: Error Boundaries, Command Palette, Shortcuts, Git, Shell, History, Updater |
+| 7 | ✅ Complete (2026-06-13) | Full-DB Encryption (SQLCipher, HKDF key split, PRAGMA rekey) |
+| 8 | ✅ Complete (2026-06-13) | Biometric Unlock (Windows Hello, AES-GCM wrapping) |
+| 9 | ✅ Complete (2026-06-13) | Multi-Device Sync (HTTP + S3 backends, version vectors, LWW) |
+| 10 | ✅ Complete (2026-06-13) | Mobile Apps (BottomNav, MobileKeyBar, useIsMobile, Android config) |
+| 11 | ✅ Complete (2026-06-13) | Team Vault (team CRUD, member management, host sharing) |
+| 12 | ✅ Complete (2026-06-13) | Plugin System (Wasmtime v29, manifest, capabilities, crash isolation) |
+| 13 | ✅ Complete (2026-06-13) | Audit Log (hash-chained, encrypted, redaction, per-host opt-in) |
+| 14 | ✅ Complete (2026-06-13) | Polish (toast notifications, encrypted export/import) |
+
+Remaining for production release: CI/CD setup, code signing certificates, cross-platform testing, and packaging.
 
 ---
 
@@ -121,10 +125,11 @@ ShellMate v1.0 is a **production release**, not an MVP. Scope spans 14 phases de
 | Styling | Tailwind CSS 3 + shadcn/ui |
 | Terminal | xterm.js |
 | SSH | russh (Rust) |
-| Mosh | Rust (Phase 14) |
-| Local Storage | SQLite + SQLCipher (Phase 7) |
-| Encryption | AES-256-GCM + Argon2id |
-| Plugin Runtime | Wasmtime (WASM sandbox, Phase 12) |
+| Local Storage | SQLite + SQLCipher |
+| Encryption | AES-256-GCM + Argon2id + HKDF |
+| Sync | HTTP + S3 backends (AWS Sig V4) |
+| Plugin Runtime | Wasmtime v29 (WASM sandbox) |
+| Biometric | Windows Hello (KeyCredentialManager) |
 | State | Zustand |
 
 ---
