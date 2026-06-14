@@ -113,6 +113,41 @@ impl Vault {
         Ok(value.as_deref() == Some("1"))
     }
 
+    /// Check if vault metadata file exists (DB is encrypted).
+    pub fn has_meta(db_path: &std::path::Path) -> bool {
+        crate::db::has_vault_meta(db_path)
+    }
+
+    /// Verify password using vault metadata file (no DB needed).
+    /// Returns the master key on success.
+    pub fn verify_from_meta(
+        db_path: &std::path::Path,
+        password: &str,
+    ) -> AppResult<[u8; 32]> {
+        let (salt, nonce_bytes, ciphertext) = crate::db::read_vault_meta(db_path)?;
+
+        let mut master_key = crypto::derive_key(password.as_bytes(), &salt)?;
+        let (vault_key, _db_key) = crypto::derive_vault_and_db_keys(&master_key);
+
+        let nonce = unfixed_nonce(&nonce_bytes)?;
+        let blob = EncryptedBlob { ciphertext, nonce };
+        let plaintext = match crypto::decrypt(&vault_key, &blob) {
+            Ok(p) => p,
+            Err(_) => {
+                master_key.zeroize();
+                return Err(AppError::InvalidInput("incorrect master password".into()));
+            }
+        };
+
+        if plaintext.ct_eq(VERIFIER_PLAINTEXT).unwrap_u8() != 1 {
+            master_key.zeroize();
+            return Err(AppError::InvalidInput("incorrect master password".into()));
+        }
+
+        // Don't zeroize master_key — caller needs it to derive vault/db keys.
+        Ok(master_key)
+    }
+
     /// Initialize the vault for the first time. Stores the salt and a verifier
     /// ciphertext. The derived key is held in memory (vault becomes unlocked).
     /// Returns the DB key for SQLCipher encryption.
@@ -455,5 +490,17 @@ fn unhex_fixed<const N: usize>(s: &str) -> AppResult<[u8; N]> {
     }
     let mut out = [0u8; N];
     out.copy_from_slice(&v);
+    Ok(out)
+}
+
+fn unfixed_nonce(v: &[u8]) -> AppResult<[u8; NONCE_LEN]> {
+    if v.len() != NONCE_LEN {
+        return Err(AppError::Internal(format!(
+            "expected {NONCE_LEN}-byte nonce, got {}",
+            v.len()
+        )));
+    }
+    let mut out = [0u8; NONCE_LEN];
+    out.copy_from_slice(v);
     Ok(out)
 }

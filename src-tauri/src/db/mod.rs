@@ -3,10 +3,76 @@ pub mod schema;
 
 use crate::errors::{AppError, AppResult};
 use rusqlite::Connection;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// SQLCipher key length (256-bit).
 const SQLCIPHER_KEY_LEN: usize = 32;
+
+/// Vault metadata file — stores salt + encrypted verifier in plaintext
+/// alongside the encrypted DB. Allows password verification before opening
+/// the encrypted database.
+const VAULT_META_MAGIC: &[u8] = b"SHELMATE_VAULT1";
+const VAULT_META_SALT_OFFSET: usize = 16; // after magic
+const VAULT_META_SALT_LEN: usize = 16;
+const VAULT_META_NONCE_OFFSET: usize = VAULT_META_SALT_OFFSET + VAULT_META_SALT_LEN;
+const VAULT_META_NONCE_LEN: usize = 12;
+const VAULT_META_CT_OFFSET: usize = VAULT_META_NONCE_OFFSET + VAULT_META_NONCE_LEN;
+
+/// Get the vault metadata file path for a given DB path.
+fn vault_meta_path(db_path: &Path) -> PathBuf {
+    db_path.with_extension("vault")
+}
+
+/// Check if a vault metadata file exists for this DB.
+pub fn has_vault_meta(db_path: &Path) -> bool {
+    vault_meta_path(db_path).exists()
+}
+
+/// Write vault metadata after setup/migration.
+/// Stores: magic (16) + salt (16) + nonce (12) + ciphertext (variable).
+pub fn write_vault_meta(
+    db_path: &Path,
+    salt: &[u8],
+    nonce: &[u8],
+    ciphertext: &[u8],
+) -> AppResult<()> {
+    let meta_path = vault_meta_path(db_path);
+    let mut data = Vec::with_capacity(16 + 16 + 12 + ciphertext.len());
+    data.extend_from_slice(VAULT_META_MAGIC);
+    data.extend_from_slice(salt);
+    data.extend_from_slice(nonce);
+    data.extend_from_slice(ciphertext);
+    std::fs::write(&meta_path, &data)?;
+    log::info!("Vault metadata written to {}", meta_path.display());
+    Ok(())
+}
+
+/// Read vault metadata. Returns (salt, nonce, ciphertext).
+pub fn read_vault_meta(db_path: &Path) -> AppResult<([u8; 16], [u8; 12], Vec<u8>)> {
+    let meta_path = vault_meta_path(db_path);
+    let data = std::fs::read(&meta_path)?;
+
+    if data.len() < VAULT_META_CT_OFFSET {
+        return Err(AppError::Internal("vault meta file too short".into()));
+    }
+    if &data[..16] != VAULT_META_MAGIC {
+        return Err(AppError::Internal("vault meta invalid magic".into()));
+    }
+
+    let mut salt = [0u8; 16];
+    salt.copy_from_slice(&data[VAULT_META_SALT_OFFSET..VAULT_META_SALT_OFFSET + 16]);
+    let mut nonce = [0u8; 12];
+    nonce.copy_from_slice(&data[VAULT_META_NONCE_OFFSET..VAULT_META_NONCE_OFFSET + 12]);
+    let ciphertext = data[VAULT_META_CT_OFFSET..].to_vec();
+
+    Ok((salt, nonce, ciphertext))
+}
+
+/// Remove vault metadata file (called on vault reset).
+pub fn remove_vault_meta(db_path: &Path) {
+    let meta_path = vault_meta_path(db_path);
+    let _ = std::fs::remove_file(meta_path);
+}
 
 /// Open or create the SQLite database at the given path and run pending migrations.
 /// If `db_key` is Some, the database is opened/created with SQLCipher encryption.
@@ -43,6 +109,10 @@ pub fn open(path: &Path, db_key: Option<&[u8; SQLCIPHER_KEY_LEN]>) -> AppResult<
 /// without a key and contains the expected schema.
 pub fn is_plaintext_db(path: &Path) -> bool {
     if !path.exists() {
+        return false;
+    }
+    // If vault meta exists, the DB is encrypted.
+    if has_vault_meta(path) {
         return false;
     }
     // Try to open without a key and read the settings table.

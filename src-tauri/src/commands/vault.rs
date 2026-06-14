@@ -29,15 +29,13 @@ fn encrypt_and_swap_db(
     }
 
     // Open a new encrypted connection and swap it in.
-    // If this fails, the DB might be corrupted from a previous buggy migration.
-    // Try to recover from backup.
+    // If this fails, try to recover from backup.
     let new_conn = match db::open(db_path, Some(db_key)) {
         Ok(conn) => conn,
         Err(e) => {
-            log::warn!("Failed to open encrypted DB: {e}. Attempting recovery from backup.");
+            log::warn!("Failed to open encrypted DB: {e}. Attempting recovery.");
             let backup_path = db_path.with_extension("db.bak");
             if backup_path.exists() {
-                // Restore backup and re-migrate.
                 std::fs::copy(&backup_path, db_path)?;
                 db::migrate_to_encrypted(db_path, db_key)?;
                 db::open(db_path, Some(db_key))?
@@ -51,16 +49,50 @@ fn encrypt_and_swap_db(
     Ok(())
 }
 
+/// Write vault metadata file from DB settings (after setup has stored them).
+fn write_meta_from_db(state: &AppState) -> AppResult<()> {
+    let conn = state.db.lock();
+    let salt_hex: String = conn.query_row(
+        "SELECT value FROM settings WHERE key = 'vault.salt'",
+        [],
+        |row| row.get(0),
+    )?;
+    let ct_hex: String = conn.query_row(
+        "SELECT value FROM settings WHERE key = 'vault.verifier.ciphertext'",
+        [],
+        |row| row.get(0),
+    )?;
+    let nonce_hex: String = conn.query_row(
+        "SELECT value FROM settings WHERE key = 'vault.verifier.nonce'",
+        [],
+        |row| row.get(0),
+    )?;
+
+    let salt = hex::decode(&salt_hex).map_err(|e| crate::errors::AppError::Internal(format!("salt hex: {e}")))?;
+    let nonce = hex::decode(&nonce_hex).map_err(|e| crate::errors::AppError::Internal(format!("nonce hex: {e}")))?;
+    let ct = hex::decode(&ct_hex).map_err(|e| crate::errors::AppError::Internal(format!("ct hex: {e}")))?;
+
+    db::write_vault_meta(&state.db_path, &salt, &nonce, &ct)
+}
+
 #[tauri::command]
 pub async fn vault_status(state: State<'_, AppState>) -> AppResult<VaultStatus> {
-    let initialized = {
+    // Check if DB is encrypted via metadata file.
+    let db_encrypted = db::has_vault_meta(&state.db_path);
+
+    // If encrypted, vault is initialized if meta exists.
+    // If plaintext, check the DB.
+    let initialized = if db_encrypted {
+        true // Meta exists = vault was set up.
+    } else {
         let conn = state.db.lock();
         Vault::is_initialized(&conn)?
     };
+
     Ok(VaultStatus {
         initialized,
         unlocked: state.vault.is_unlocked(),
-        db_encrypted: state.vault.get_db_key().is_some(),
+        db_encrypted,
     })
 }
 
@@ -74,6 +106,9 @@ pub async fn vault_setup(
         state.vault.setup(&conn, &password)?
     };
 
+    // Write vault metadata file BEFORE encrypting DB.
+    write_meta_from_db(&state)?;
+
     // Encrypt the database with the newly derived key.
     encrypt_and_swap_db(&state, &db_key)?;
 
@@ -85,14 +120,28 @@ pub async fn vault_unlock(
     state: State<'_, AppState>,
     password: String,
 ) -> AppResult<()> {
-    // First, try to unlock against the current (possibly plaintext) connection.
-    let db_key = {
-        let conn = state.db.lock();
-        state.vault.unlock(&conn, &password)?
-    };
+    let db_path = &state.db_path;
 
-    // Now that we have the db_key, ensure the DB is encrypted and reopen.
-    encrypt_and_swap_db(&state, &db_key)?;
+    if db::has_vault_meta(db_path) {
+        // DB is encrypted. Verify password from metadata file, then open DB.
+        let master_key = Vault::verify_from_meta(db_path, &password)?;
+        let (vault_key, db_key) = crate::crypto::derive_vault_and_db_keys(&master_key);
+
+        // Set vault keys in memory.
+        state.vault.unlock_with_key(&master_key)?;
+
+        // Open encrypted DB and swap.
+        let new_conn = db::open(db_path, Some(&db_key))?;
+        state.swap_db(new_conn);
+        log::info!("Vault unlocked via metadata file, DB reopened encrypted");
+    } else {
+        // Plaintext DB — use the old flow.
+        let db_key = {
+            let conn = state.db.lock();
+            state.vault.unlock(&conn, &password)?
+        };
+        encrypt_and_swap_db(&state, &db_key)?;
+    }
 
     Ok(())
 }
@@ -122,28 +171,20 @@ pub async fn vault_change_master_password(
 ) -> AppResult<()> {
     let mut conn = state.db.lock();
 
-    // Step 1: Derive the new db_key preview from the new password so we can
-    // rekey SQLCipher after the vault commits.
-    // We need the salt that will be used. The vault layer generates a fresh salt
-    // internally. We can't preview it, but we CAN derive it after vault commits
-    // because `get_db_key()` returns the in-memory key.
-    //
-    // Strategy: vault.change_master_password commits the credential re-encryption
-    // and stores the new db_key in memory. The SQLCipher connection still has the
-    // old key at that point (PRAGMA key was set when the connection was opened).
-    // We call PRAGMA rekey immediately after vault commits, while old key is still
-    // active on the connection.
-
     state
         .vault
         .change_master_password(&mut conn, &current_password, &new_password)?;
 
-    // Step 2: Rotate SQLCipher key. Connection still has old PRAGMA key.
+    // Rotate SQLCipher key if DB is encrypted.
     if let Some(new_db_key) = state.vault.get_db_key() {
         let key_hex = hex::encode(new_db_key);
         conn.execute_batch(&format!("PRAGMA rekey = 'x\"{key_hex}\"'"))?;
         log::info!("SQLCipher DB key rotated successfully");
     }
+
+    // Update vault metadata file with new verifier.
+    drop(conn);
+    write_meta_from_db(&state)?;
 
     Ok(())
 }
