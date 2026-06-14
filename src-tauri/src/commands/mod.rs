@@ -16,6 +16,7 @@ pub mod sftp;
 pub mod snippet;
 pub mod ssh;
 pub mod sync;
+pub mod server_stats;
 pub mod system;
 pub mod team;
 pub mod theme;

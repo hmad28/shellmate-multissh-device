@@ -7,6 +7,9 @@ import {
   Wifi,
   PanelLeftClose,
   PanelLeftOpen,
+  Activity,
+  Box,
+  Import,
 } from 'lucide-react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
@@ -85,6 +88,36 @@ export function Sidebar() {
               onClick={() =>
                 setActivePanel(
                   activePanel === 'p2p-sync' ? 'hosts' : 'p2p-sync',
+                )
+              }
+            />
+            <PanelButton
+              icon={<Activity size={14} />}
+              label="Server Stats"
+              active={activePanel === 'server-stats'}
+              onClick={() =>
+                setActivePanel(
+                  activePanel === 'server-stats' ? 'hosts' : 'server-stats',
+                )
+              }
+            />
+            <PanelButton
+              icon={<Box size={14} />}
+              label="Docker"
+              active={activePanel === 'docker'}
+              onClick={() =>
+                setActivePanel(
+                  activePanel === 'docker' ? 'hosts' : 'docker',
+                )
+              }
+            />
+            <PanelButton
+              icon={<Import size={14} />}
+              label="Import Hosts"
+              active={activePanel === 'import'}
+              onClick={() =>
+                setActivePanel(
+                  activePanel === 'import' ? 'hosts' : 'import',
                 )
               }
             />

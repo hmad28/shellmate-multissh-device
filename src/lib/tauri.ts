@@ -42,6 +42,7 @@ import type {
 } from '@/types/team';
 import type { Plugin, PluginCapability } from '@/types/plugin';
 import type { AuditEvent, AuditSettings, AuditQuery } from '@/types/audit';
+import type { ServerStats } from '@/types/server-stats';
 
 /**
  * Typed wrappers around Tauri `invoke`.
@@ -279,5 +280,11 @@ export const tauri = {
       invoke<string>('export_hosts_encrypted', { exportPassword: password }),
     importHostsEncrypted: (data: string, password: string) =>
       invoke<number>('import_hosts_encrypted', { exportData: data, exportPassword: password }),
+  },
+  serverStats: {
+    exec: (hostId: string) =>
+      invoke<ServerStats>('server_stats_exec', { hostId }),
+    execRaw: (hostId: string, command: string) =>
+      invoke<string>('remote_exec', { hostId, command }),
   },
 } as const;

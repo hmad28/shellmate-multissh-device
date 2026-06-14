@@ -191,6 +191,9 @@ pub fn run() {
             // Export/Import
             commands::export::export_hosts_encrypted,
             commands::export::import_hosts_encrypted,
+            // Server Stats & Remote Exec
+            commands::server_stats::server_stats_exec,
+            commands::server_stats::remote_exec,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

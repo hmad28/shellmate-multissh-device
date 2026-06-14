@@ -9,7 +9,10 @@ export type ActivePanel =
   | 'broadcast'
   | 'vip-access'
   | 'p2p-sync'
-  | 'history';
+  | 'history'
+  | 'server-stats'
+  | 'docker'
+  | 'import';
 
 interface UiStore {
   sidebarCollapsed: boolean;

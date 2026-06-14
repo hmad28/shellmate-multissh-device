@@ -9,6 +9,9 @@ import { BroadcastModePanel } from '@/components/terminal/BroadcastModePanel';
 import { VipAccessPanel } from '@/components/vip/VipAccessPanel';
 import { P2pSyncPanel } from '@/components/sync/P2pSyncPanel';
 import { CommandHistoryPanel } from '@/components/history/CommandHistoryPanel';
+import { ServerStatsPanel } from '@/components/server/ServerStatsPanel';
+import { DockerPanel } from '@/components/server/DockerPanel';
+import { ImportPanel } from '@/components/import/ImportPanel';
 import { Terminal } from '@/components/terminal/Terminal';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
@@ -22,6 +25,7 @@ import {
   type SplitNode,
 } from '@/stores/pane-store';
 import { useVaultStore } from '@/stores/vault-store';
+import { useHostStore } from '@/stores/host-store';
 import { useDragStore } from '@/stores/drag-store';
 import { cn } from '@/lib/cn';
 import type { Tab } from '@/types';
@@ -72,6 +76,22 @@ export function ContentArea() {
       {activePanel === 'broadcast' && (
         <main className="flex flex-1 overflow-hidden bg-bg p-6">
           <BroadcastModePanel onClose={() => setActivePanel('hosts')} />
+        </main>
+      )}
+
+      {activePanel === 'server-stats' && (
+        <main className="flex flex-1 overflow-hidden bg-bg">
+          <ServerStatsPanelWrapper />
+        </main>
+      )}
+      {activePanel === 'docker' && (
+        <main className="flex flex-1 overflow-hidden bg-bg">
+          <DockerPanelWrapper />
+        </main>
+      )}
+      {activePanel === 'import' && (
+        <main className="flex flex-1 overflow-hidden bg-bg">
+          <ImportPanel />
         </main>
       )}
 
@@ -561,4 +581,75 @@ function DropZoneOverlay({ region }: { region: string }) {
       />
     </div>
   );
+}
+
+function ServerStatsPanelWrapper() {
+  const hosts = useHostStore((s) => s.hosts);
+  const [selectedHost, setSelectedHost] = useState<string | null>(null);
+
+  if (hosts.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-[var(--color-fg-muted)]">
+        No hosts configured. Add a host first.
+      </div>
+    );
+  }
+
+  if (!selectedHost) {
+    return (
+      <div className="h-full overflow-y-auto p-4">
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-fg)]">Select a host to view stats</h2>
+        <div className="space-y-2">
+          {hosts.map((h) => (
+            <button
+              key={h.id}
+              onClick={() => setSelectedHost(h.id)}
+              className="flex w-full items-center gap-3 rounded-lg border border-[var(--color-border)] p-3 text-left hover:bg-[var(--color-bg-elevated)]"
+            >
+              <span className="font-medium text-[var(--color-fg)]">{h.label}</span>
+              <span className="text-xs text-[var(--color-fg-muted)]">{h.hostname}:{h.port}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const host = hosts.find((h) => h.id === selectedHost);
+  return <ServerStatsPanel hostId={selectedHost} hostLabel={host?.label || selectedHost} />;
+}
+
+function DockerPanelWrapper() {
+  const hosts = useHostStore((s) => s.hosts);
+  const [selectedHost, setSelectedHost] = useState<string | null>(null);
+
+  if (hosts.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-[var(--color-fg-muted)]">
+        No hosts configured. Add a host first.
+      </div>
+    );
+  }
+
+  if (!selectedHost) {
+    return (
+      <div className="h-full overflow-y-auto p-4">
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-fg)]">Select a host for Docker management</h2>
+        <div className="space-y-2">
+          {hosts.map((h) => (
+            <button
+              key={h.id}
+              onClick={() => setSelectedHost(h.id)}
+              className="flex w-full items-center gap-3 rounded-lg border border-[var(--color-border)] p-3 text-left hover:bg-[var(--color-bg-elevated)]"
+            >
+              <span className="font-medium text-[var(--color-fg)]">{h.label}</span>
+              <span className="text-xs text-[var(--color-fg-muted)]">{h.hostname}:{h.port}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return <DockerPanel hostId={selectedHost} />;
 }
