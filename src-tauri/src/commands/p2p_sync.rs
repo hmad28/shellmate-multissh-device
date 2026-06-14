@@ -3,6 +3,7 @@ use crate::vault::Vault;
 use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 use argon2::Argon2;
 use base64::Engine;
+use log::warn;
 use parking_lot::Mutex;
 use rand::Rng;
 use rusqlite::Connection;
@@ -187,16 +188,37 @@ async fn handle_sync_receive(
     };
 
     if req.pin != expected_pin {
-        // Track failed attempt
-        if let Some(addr) = peer_addr {
+        // Track failed attempt with rate limiting.
+        let rate_limited = if let Some(addr) = peer_addr {
             let mut inner = server_state.inner.lock();
             let now = Instant::now();
             let entry = inner.failed_attempts.entry(addr.ip()).or_insert((0, now));
-            entry.0 += 1;
-            entry.1 = now;
+
+            if now.duration_since(entry.1).as_secs() > RATE_LIMIT_WINDOW_SECS {
+                *entry = (1, now);
+                false
+            } else {
+                entry.0 += 1;
+                entry.1 = now;
+                if entry.0 >= MAX_PIN_ATTEMPTS as u32 {
+                    warn!("Rate limit exceeded for {}", addr.ip());
+                    true
+                } else {
+                    false
+                }
+            }
+        } else {
+            false
+        };
+        // Lock is dropped here before any .await.
+
+        if rate_limited {
+            let response = "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 60\r\nContent-Length: 0\r\n\r\n";
+            let _ = stream.write_all(response.as_bytes()).await;
+        } else {
+            let response = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n";
+            let _ = stream.write_all(response.as_bytes()).await;
         }
-        let response = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n";
-        let _ = stream.write_all(response.as_bytes()).await;
         return;
     }
 
