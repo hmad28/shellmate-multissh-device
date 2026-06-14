@@ -43,6 +43,7 @@ import type {
 import type { Plugin, PluginCapability } from '@/types/plugin';
 import type { AuditEvent, AuditSettings, AuditQuery } from '@/types/audit';
 import type { ServerStats } from '@/types/server-stats';
+import type { SessionRecording, SessionEvent, SshKey, LocalSession, SftpTransfer } from '@/types/advanced';
 
 /**
  * Typed wrappers around Tauri `invoke`.
@@ -286,5 +287,44 @@ export const tauri = {
       invoke<ServerStats>('server_stats_exec', { hostId }),
     execRaw: (hostId: string, command: string) =>
       invoke<string>('remote_exec', { hostId, command }),
+  },
+  recording: {
+    start: (sessionId: string, hostId: string | null, hostLabel: string) =>
+      invoke<string>('recording_start', { sessionId, hostId, hostLabel }),
+    stop: (recordingId: string) =>
+      invoke<void>('recording_stop', { recordingId }),
+    event: (recordingId: string, eventType: string, data: string) =>
+      invoke<void>('recording_event', { recordingId, eventType, data }),
+    list: () => invoke<SessionRecording[]>('recording_list'),
+    events: (recordingId: string) =>
+      invoke<SessionEvent[]>('recording_events', { recordingId }),
+    delete: (recordingId: string) =>
+      invoke<void>('recording_delete', { recordingId }),
+  },
+  sshKey: {
+    generate: (name: string, keyType: string, bits: number, passphrase?: string) =>
+      invoke<SshKey>('ssh_key_generate', { name, keyType, bits, passphrase: passphrase ?? null }),
+    list: () => invoke<SshKey[]>('ssh_key_list'),
+    getPrivate: (keyId: string) =>
+      invoke<string>('ssh_key_get_private', { keyId }),
+    getPublic: (keyId: string) =>
+      invoke<string>('ssh_key_get_public', { keyId }),
+    delete: (keyId: string) =>
+      invoke<void>('ssh_key_delete', { keyId }),
+  },
+  localShell: {
+    spawn: (shell?: string) =>
+      invoke<LocalSession>('local_shell_spawn', { shell: shell ?? null }),
+    send: (sessionId: string, data: string) =>
+      invoke<void>('local_shell_send', { sessionId, data }),
+    read: (sessionId: string) =>
+      invoke<string>('local_shell_read', { sessionId }),
+    kill: (sessionId: string) =>
+      invoke<void>('local_shell_kill', { sessionId }),
+    list: () => invoke<string[]>('local_shell_list'),
+  },
+  hostTransfer: {
+    start: (sourceHostId: string, sourcePath: string, destHostId: string, destPath: string) =>
+      invoke<SftpTransfer>('sftp_host_transfer', { sourceHostId, sourcePath, destHostId, destPath }),
   },
 } as const;

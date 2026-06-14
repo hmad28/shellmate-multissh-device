@@ -7,10 +7,12 @@ use crate::ssh::BroadcastManager;
 use crate::ssh::SessionManager;
 use crate::sync::SyncEngine;
 use crate::vault::Vault;
+use dashmap::DashMap;
 use parking_lot::Mutex;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::process::Child;
 
 pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
@@ -24,6 +26,7 @@ pub struct AppState {
     pub biometric: Arc<Box<dyn BiometricProvider>>,
     pub sync: Arc<SyncEngine>,
     pub plugin_runtime: Arc<PluginRuntime>,
+    pub local_sessions: Arc<DashMap<String, tokio::sync::Mutex<tokio::process::Child>>>,
 }
 
 impl AppState {
@@ -45,6 +48,7 @@ impl AppState {
             biometric: Arc::new(crate::biometric::create_provider()),
             sync: Arc::new(SyncEngine::new()),
             plugin_runtime,
+            local_sessions: Arc::new(DashMap::new()),
         }
     }
 

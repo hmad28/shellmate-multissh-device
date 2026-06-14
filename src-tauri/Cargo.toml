@@ -58,6 +58,8 @@ rand_core = "0.6"
 dirs = "5"
 hex = "0.4"
 reqwest = { version = "0.13", features = ["json"] }
+dashmap = "6"
+which = "7"
 
 # Plugin system (Wasmtime WASM runtime)
 wasmtime = { version = "29", features = ["component-model"] }

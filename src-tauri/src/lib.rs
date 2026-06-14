@@ -16,7 +16,6 @@ mod biometric;
 mod sync;
 mod team;
 mod audit;
-
 use crate::commands::p2p_sync::SyncServerState;
 use crate::commands::vip_access::VipKeyStore;
 use crate::state::AppState;
@@ -194,6 +193,27 @@ pub fn run() {
             // Server Stats & Remote Exec
             commands::server_stats::server_stats_exec,
             commands::server_stats::remote_exec,
+            // Session Recording
+            commands::recording::recording_start,
+            commands::recording::recording_stop,
+            commands::recording::recording_event,
+            commands::recording::recording_list,
+            commands::recording::recording_events,
+            commands::recording::recording_delete,
+            // SSH Key Manager
+            commands::ssh_key::ssh_key_generate,
+            commands::ssh_key::ssh_key_list,
+            commands::ssh_key::ssh_key_get_private,
+            commands::ssh_key::ssh_key_get_public,
+            commands::ssh_key::ssh_key_delete,
+            // Local Shell
+            commands::local_shell::local_shell_spawn,
+            commands::local_shell::local_shell_send,
+            commands::local_shell::local_shell_read,
+            commands::local_shell::local_shell_kill,
+            commands::local_shell::local_shell_list,
+            // Host-to-Host Transfer
+            commands::host_transfer::sftp_host_transfer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -262,4 +262,49 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     );
     "#,
     ),
+    (
+        "010_session_recording",
+        r#"
+    CREATE TABLE IF NOT EXISTS session_recordings (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        host_id TEXT REFERENCES hosts(id) ON DELETE SET NULL,
+        host_label TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        duration_secs INTEGER,
+        event_count INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS session_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recording_id TEXT NOT NULL REFERENCES session_recordings(id) ON DELETE CASCADE,
+        timestamp_ms INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        data TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_session_recordings_started ON session_recordings(started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_session_events_recording ON session_events(recording_id, timestamp_ms);
+    "#,
+    ),
+    (
+        "011_ssh_keys",
+        r#"
+    CREATE TABLE IF NOT EXISTS ssh_keys (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        key_type TEXT NOT NULL CHECK (key_type IN ('ed25519', 'rsa', 'ecdsa')),
+        fingerprint TEXT NOT NULL,
+        public_key TEXT NOT NULL,
+        encrypted_private_key BLOB NOT NULL,
+        private_key_nonce BLOB NOT NULL,
+        has_passphrase INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ssh_keys_fingerprint ON ssh_keys(fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_ssh_keys_name ON ssh_keys(name);
+    "#,
+    ),
 ];
