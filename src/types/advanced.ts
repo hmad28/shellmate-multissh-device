@@ -40,3 +40,15 @@ export interface SftpTransfer {
   status: string;
   bytesTransferred: number;
 }
+
+export interface ParsedHost {
+  label: string;
+  hostname: string;
+  port: number;
+  username: string;
+  authType: string;
+  identityFile: string | null;
+  proxyJump: string | null;
+  forwardAgent: boolean;
+  compression: boolean;
+}

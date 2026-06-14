@@ -18,6 +18,7 @@ pub mod settings;
 pub mod sftp;
 pub mod snippet;
 pub mod ssh;
+pub mod ssh_config;
 pub mod ssh_key;
 pub mod sync;
 pub mod server_stats;
