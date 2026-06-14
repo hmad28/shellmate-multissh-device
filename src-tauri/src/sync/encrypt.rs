@@ -138,4 +138,32 @@ mod tests {
         let decrypted = decrypt_credentials(&ct, &nonce, &master).unwrap();
         assert_eq!(decrypted, creds);
     }
+
+    #[test]
+    fn test_wrong_master_key_fails_credentials() {
+        let master1 = [1u8; 32];
+        let master2 = [2u8; 32];
+        let creds = b"secret credentials";
+        let (ct, nonce) = encrypt_credentials(creds, &master1).unwrap();
+        assert!(decrypt_credentials(&ct, &nonce, &master2).is_err());
+    }
+
+    #[test]
+    fn test_different_master_keys_different_payload_keys() {
+        let m1 = [1u8; 32];
+        let m2 = [2u8; 32];
+        let k1 = derive_sync_payload_key(&m1);
+        let k2 = derive_sync_payload_key(&m2);
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn test_payload_encrypt_decrypt_with_sync_key() {
+        let master = [55u8; 32];
+        let key = derive_sync_payload_key(&master);
+        let data = b"host config data";
+        let encrypted = encrypt_payload(data, &key).unwrap();
+        let decrypted = decrypt_payload(&encrypted, &key).unwrap();
+        assert_eq!(decrypted, data);
+    }
 }
