@@ -90,4 +90,32 @@ mod tests {
         let b = derive_key(b"password", &[1u8; SALT_LEN]).unwrap();
         assert_ne!(a, b);
     }
+
+    #[test]
+    fn derive_key_wrong_salt_length_fails() {
+        assert!(derive_key(b"password", &[0u8; 8]).is_err());
+    }
+
+    #[test]
+    fn generate_salt_is_random() {
+        let a = generate_salt();
+        let b = generate_salt();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn derive_vault_and_db_keys_are_different() {
+        let master = [42u8; KEY_LEN];
+        let (vault, db) = derive_vault_and_db_keys(&master);
+        assert_ne!(vault, db);
+    }
+
+    #[test]
+    fn derive_vault_and_db_keys_are_deterministic() {
+        let master = [42u8; KEY_LEN];
+        let (v1, d1) = derive_vault_and_db_keys(&master);
+        let (v2, d2) = derive_vault_and_db_keys(&master);
+        assert_eq!(v1, v2);
+        assert_eq!(d1, d2);
+    }
 }
