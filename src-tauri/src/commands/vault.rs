@@ -77,22 +77,27 @@ fn write_meta_from_db(state: &AppState) -> AppResult<()> {
 
 #[tauri::command]
 pub async fn vault_status(state: State<'_, AppState>) -> AppResult<VaultStatus> {
-    // Check if DB is encrypted via metadata file.
+    // Check if vault metadata file exists — if so, DB is encrypted.
     let db_encrypted = db::has_vault_meta(&state.db_path);
 
-    // If encrypted, vault is initialized if meta exists.
-    // If plaintext, check the DB.
-    let initialized = if db_encrypted {
-        true // Meta exists = vault was set up.
-    } else {
+    if db_encrypted {
+        // Don't try to open the encrypted DB — just report status from meta file.
+        return Ok(VaultStatus {
+            initialized: true,
+            unlocked: state.vault.is_unlocked(),
+            db_encrypted: true,
+        });
+    }
+
+    // Plaintext DB — safe to query.
+    let initialized = {
         let conn = state.db.lock();
         Vault::is_initialized(&conn)?
     };
-
     Ok(VaultStatus {
         initialized,
         unlocked: state.vault.is_unlocked(),
-        db_encrypted,
+        db_encrypted: false,
     })
 }
 
@@ -108,6 +113,14 @@ pub async fn vault_setup(
 
     // Write vault metadata file BEFORE encrypting DB.
     write_meta_from_db(&state)?;
+
+    // Verify the vault file was written.
+    if !db::has_vault_meta(&state.db_path) {
+        return Err(crate::errors::AppError::Internal(
+            "vault metadata file was not written".into(),
+        ));
+    }
+    log::info!("Vault metadata file verified at {:?}", state.db_path.with_extension("vault"));
 
     // Encrypt the database with the newly derived key.
     encrypt_and_swap_db(&state, &db_key)?;

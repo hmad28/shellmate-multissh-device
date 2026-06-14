@@ -40,7 +40,18 @@ pub fn run() {
             let db_path = app_data_dir.join("shellmate.db");
 
             log::info!("Opening database at {}", db_path.display());
-            let conn = db::open(&db_path, None).expect("failed to initialize database");
+
+            // Check if vault metadata exists — if so, DB is encrypted.
+            // Don't try to open it without a key. The unlock flow will handle it.
+            let conn = if db::has_vault_meta(&db_path) {
+                log::info!("Vault metadata found — DB is encrypted. Deferring open until unlock.");
+                // Create a temporary in-memory DB so AppState can be initialized.
+                // The real DB will be swapped in after vault unlock.
+                db::open(&std::path::Path::new(":memory:"), None)
+                    .expect("failed to create temporary database")
+            } else {
+                db::open(&db_path, None).expect("failed to initialize database")
+            };
 
             app.manage(AppState::new(conn, db_path));
             app.manage(Arc::new(VipKeyStore::new()));
