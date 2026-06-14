@@ -25,6 +25,7 @@ pub struct SyncServerState {
 struct SyncServerInner {
     shutdown_tx: Option<oneshot::Sender<()>>,
     pin: Option<String>,
+    session_key: [u8; 32],
     is_running: bool,
     failed_attempts: HashMap<std::net::IpAddr, (u32, Instant)>,
 }
@@ -35,6 +36,7 @@ impl SyncServerState {
             inner: Mutex::new(SyncServerInner {
                 shutdown_tx: None,
                 pin: None,
+                session_key: generate_session_key(),
                 is_running: false,
                 failed_attempts: HashMap::new(),
             }),
@@ -100,6 +102,7 @@ struct SnippetExport {
 #[derive(Debug, Deserialize)]
 struct SyncReceiveRequest {
     pin: String,
+    session_key_encrypted: Vec<u8>,
     payload: Vec<u8>,
 }
 
@@ -108,12 +111,22 @@ fn generate_pin() -> String {
     format!("{:06}", rng.gen_range(0..1_000_000))
 }
 
-fn derive_key_from_pin(pin: &str, salt: &[u8]) -> AppResult<[u8; 32]> {
+/// Generate a random 32-byte session key for P2P transfer encryption.
+/// The PIN is NOT used as encryption key — it's only for authentication.
+fn generate_session_key() -> [u8; 32] {
     let mut key = [0u8; 32];
-    Argon2::default()
-        .hash_password_into(pin.as_bytes(), salt, &mut key)
-        .map_err(|e| AppError::Internal(format!("key derivation failed: {e}")))?;
-    Ok(key)
+    rand::thread_rng().fill(&mut key);
+    key
+}
+
+/// Derive an encryption key from a session key using HKDF.
+fn derive_encryption_key(session_key: &[u8; 32]) -> [u8; 32] {
+    use hkdf::Hkdf;
+    use sha2::Sha256;
+    let hk = Hkdf::<Sha256>::new(Some(b"shellmate-p2p-v1"), session_key);
+    let mut key = [0u8; 32];
+    hk.expand(b"p2p-transfer-key", &mut key).expect("HKDF expand failed");
+    key
 }
 
 fn encrypt_payload(key: &[u8; 32], plaintext: &[u8]) -> AppResult<Vec<u8>> {
@@ -187,16 +200,33 @@ async fn handle_sync_receive(
         return;
     }
 
-    let salt = b"shellmate-sync-argon2id-salt-v1";
-    let key = match derive_key_from_pin(&req.pin, salt) {
-        Ok(k) => k,
-        Err(_) => {
+    // Decrypt the session key using PIN-derived key.
+    let pin_salt = b"shellmate-p2p-pin-salt-v1";
+    let pin_key = {
+        let mut key = [0u8; 32];
+        if Argon2::default().hash_password_into(req.pin.as_bytes(), pin_salt, &mut key).is_err() {
             let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
             let _ = stream.write_all(response.as_bytes()).await;
             return;
         }
+        key
     };
-    let decrypted = match decrypt_payload(&key, &req.payload) {
+    let session_key = match decrypt_payload(&pin_key, &req.session_key_encrypted) {
+        Ok(d) if d.len() == 32 => {
+            let mut k = [0u8; 32];
+            k.copy_from_slice(&d);
+            k
+        }
+        _ => {
+            let response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+            let _ = stream.write_all(response.as_bytes()).await;
+            return;
+        }
+    };
+
+    // Use session key for payload decryption.
+    let enc_key = derive_encryption_key(&session_key);
+    let decrypted = match decrypt_payload(&enc_key, &req.payload) {
         Ok(d) => d,
         Err(_) => {
             let response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
@@ -446,9 +476,19 @@ async fn run_server(
 
                             match (method.as_str(), path.as_str()) {
                                 ("GET", "/pair") => {
+                                    // Return server info + session key encrypted with PIN.
+                                    // PIN is NOT returned — client must know it from server display.
+                                    let session_key_encrypted = {
+                                        let inner = server_state_ref.inner.lock();
+                                        let pin_salt = b"shellmate-p2p-pin-salt-v1";
+                                        let mut pin_key = [0u8; 32];
+                                        let _ = Argon2::default().hash_password_into(pin.as_bytes(), pin_salt, &mut pin_key);
+                                        let enc_key = derive_encryption_key(&pin_key);
+                                        encrypt_payload(&enc_key, &inner.session_key).ok()
+                                    };
                                     let body = serde_json::json!({
-                                        "pin": &pin,
                                         "port": port,
+                                        "session_key_encrypted": session_key_encrypted,
                                     });
                                     let response = format!(
                                         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",

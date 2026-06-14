@@ -9,8 +9,6 @@ const HKDF_SALT: &[u8] = b"shellmate-sync-v1";
 const HKDF_INFO_CRED: &[u8] = b"sync-credential-key";
 const HKDF_INFO_PAYLOAD: &[u8] = b"sync-payload-key";
 
-/// Derive a sync encryption key from the vault's master key material.
-/// Uses HKDF with domain separation for credential vs payload encryption.
 fn derive_key_from_master(master_key: &[u8], purpose: &[u8]) -> [u8; 32] {
     let hk = Hkdf::<Sha256>::new(Some(HKDF_SALT), master_key);
     let mut key = [0u8; 32];
@@ -18,8 +16,6 @@ fn derive_key_from_master(master_key: &[u8], purpose: &[u8]) -> [u8; 32] {
     key
 }
 
-/// Encrypt sync credentials (S3 keys, bearer tokens, etc.) with a key
-/// derived from the vault master key.
 pub fn encrypt_credentials(plaintext: &[u8], master_key: &[u8]) -> AppResult<(Vec<u8>, [u8; 12])> {
     let key = derive_key_from_master(master_key, HKDF_INFO_CRED);
     let cipher = Aes256Gcm::new_from_slice(&key)
@@ -36,7 +32,6 @@ pub fn encrypt_credentials(plaintext: &[u8], master_key: &[u8]) -> AppResult<(Ve
     Ok((ciphertext, nonce_bytes))
 }
 
-/// Decrypt sync credentials.
 pub fn decrypt_credentials(ciphertext: &[u8], nonce: &[u8; 12], master_key: &[u8]) -> AppResult<Vec<u8>> {
     let key = derive_key_from_master(master_key, HKDF_INFO_CRED);
     let cipher = Aes256Gcm::new_from_slice(&key)
@@ -48,15 +43,10 @@ pub fn decrypt_credentials(ciphertext: &[u8], nonce: &[u8; 12], master_key: &[u8
         .map_err(|e| crate::errors::AppError::Internal(format!("decrypt: {e}")))
 }
 
-/// Derive a sync payload encryption key from the vault master key.
-/// This key is the SAME across all devices that share the same vault,
-/// enabling cross-device decryption.
 pub fn derive_sync_payload_key(master_key: &[u8]) -> [u8; 32] {
     derive_key_from_master(master_key, HKDF_INFO_PAYLOAD)
 }
 
-/// Encrypt a sync payload (JSON bytes) with AES-256-GCM.
-/// Returns: nonce (12 bytes) || ciphertext.
 pub fn encrypt_payload(payload: &[u8], sync_key: &[u8; 32]) -> AppResult<Vec<u8>> {
     let cipher = Aes256Gcm::new_from_slice(sync_key)
         .map_err(|e| crate::errors::AppError::Internal(format!("AES init: {e}")))?;
@@ -75,7 +65,6 @@ pub fn encrypt_payload(payload: &[u8], sync_key: &[u8; 32]) -> AppResult<Vec<u8>
     Ok(result)
 }
 
-/// Decrypt a sync payload. Input format: nonce (12 bytes) || ciphertext.
 pub fn decrypt_payload(data: &[u8], sync_key: &[u8; 32]) -> AppResult<Vec<u8>> {
     if data.len() < 12 {
         return Err(crate::errors::AppError::Internal(
@@ -92,4 +81,61 @@ pub fn decrypt_payload(data: &[u8], sync_key: &[u8; 32]) -> AppResult<Vec<u8>> {
     cipher
         .decrypt(nonce, ciphertext)
         .map_err(|e| crate::errors::AppError::Internal(format!("decrypt: {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip() {
+        let key = [42u8; 32];
+        let plaintext = b"hello, world!";
+        let encrypted = encrypt_payload(plaintext, &key).unwrap();
+        let decrypted = decrypt_payload(&encrypted, &key).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_wrong_key_fails() {
+        let key1 = [1u8; 32];
+        let key2 = [2u8; 32];
+        let plaintext = b"secret data";
+        let encrypted = encrypt_payload(plaintext, &key1).unwrap();
+        assert!(decrypt_payload(&encrypted, &key2).is_err());
+    }
+
+    #[test]
+    fn test_short_data_fails() {
+        let key = [0u8; 32];
+        assert!(decrypt_payload(&[0u8; 5], &key).is_err());
+    }
+
+    #[test]
+    fn test_different_nonces() {
+        let key = [0u8; 32];
+        let plaintext = b"same plaintext";
+        let enc1 = encrypt_payload(plaintext, &key).unwrap();
+        let enc2 = encrypt_payload(plaintext, &key).unwrap();
+        assert_ne!(enc1, enc2);
+        assert_eq!(decrypt_payload(&enc1, &key).unwrap(), plaintext);
+        assert_eq!(decrypt_payload(&enc2, &key).unwrap(), plaintext);
+    }
+
+    #[test]
+    fn test_derive_sync_payload_key_deterministic() {
+        let master = [99u8; 32];
+        let key1 = derive_sync_payload_key(&master);
+        let key2 = derive_sync_payload_key(&master);
+        assert_eq!(key1, key2);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_credentials() {
+        let master = [77u8; 32];
+        let creds = b"{'access_key': 'AKIA...', 'secret_key': '...'}";
+        let (ct, nonce) = encrypt_credentials(creds, &master).unwrap();
+        let decrypted = decrypt_credentials(&ct, &nonce, &master).unwrap();
+        assert_eq!(decrypted, creds);
+    }
 }

@@ -2,7 +2,7 @@
 
 **Version:** 2.3
 **Last Updated:** 2026-06-13
-**Status:** All 14 phases complete — ready for CI/CD, code signing, and release packaging
+**Status:** v0.2.0-beta — All 14 phases complete, ready for CI/CD, code signing, and release packaging
 
 ---
 

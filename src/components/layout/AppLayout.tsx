@@ -27,31 +27,10 @@ interface PendingVerification {
 
 export function AppLayout() {
   const isMobile = useIsMobile();
-
-  if (isMobile) {
-    return <MobileLayout />;
-  }
-
-  return <DesktopLayout />;
-}
-
-function DesktopLayout() {
   const [pendingVerification, setPendingVerification] =
     useState<PendingVerification | null>(null);
-  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
 
-  // Ctrl+B to toggle sidebar
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
-        e.preventDefault();
-        toggleSidebar();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [toggleSidebar]);
-
+  // Host key verification listener — shared between desktop and mobile.
   useEffect(() => {
     const unlisten = listen<any>('ssh:host-key-verification', (event) => {
       const {
@@ -111,17 +90,8 @@ function DesktopLayout() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-bg text-fg">
-      <TitleBar />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <TabBar />
-          <ContentArea />
-        </div>
-      </div>
-      <StatusBar />
-
+    <>
+      {isMobile ? <MobileLayout /> : <DesktopLayout />}
       {pendingVerification && (
         <HostKeyVerificationDialog
           hostname={pendingVerification.hostname}
@@ -139,6 +109,36 @@ function DesktopLayout() {
           onReject={handleReject}
         />
       )}
+    </>
+  );
+}
+
+function DesktopLayout() {
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+
+  // Ctrl+B to toggle sidebar
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [toggleSidebar]);
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden bg-bg text-fg">
+      <TitleBar />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <TabBar />
+          <ContentArea />
+        </div>
+      </div>
+      <StatusBar />
       <ToastContainer />
     </div>
   );

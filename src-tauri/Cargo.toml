@@ -1,6 +1,6 @@
 [package]
 name = "shellmate"
-version = "0.1.0"
+version = "0.2.0"
 description = "Self-hosted, local-first SSH client desktop app"
 authors = ["Matt"]
 license = "MIT"

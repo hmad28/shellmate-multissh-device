@@ -1,7 +1,7 @@
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/ShellMate-v1.0.0--rc-7c3aed?style=for-the-badge&logo=rust&logoColor=white&labelColor=1e1b4b">
-  <img alt="ShellMate" src="https://img.shields.io/badge/ShellMate-v1.0.0--rc-7c3aed?style=for-the-badge&logo=rust&logoColor=white&labelColor=1e1b4b">
+  <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/ShellMate-v0.2.0--beta-7c3aed?style=for-the-badge&logo=rust&logoColor=white&labelColor=1e1b4b">
+  <img alt="ShellMate" src="https://img.shields.io/badge/ShellMate-v0.2.0--beta-7c3aed?style=for-the-badge&logo=rust&logoColor=white&labelColor=1e1b4b">
 </picture>
 
 # ShellMate 🐚
@@ -50,6 +50,25 @@ ShellMate is built for developers, DevOps, and sysadmins who need:
 | 14 | Polish & Distribution | ✅ |
 
 All 14 phases complete. See [docs/01-development-plan.md](docs/01-development-plan.md) for detailed deliverables.
+
+### Capability Matrix
+
+| Capability | Status | Notes |
+|------------|--------|-------|
+| Multi-SSH sessions | Implemented | Independent tabs, broadcast mode |
+| Credential vault | Implemented | AES-256-GCM + Argon2id, zeroized memory |
+| Full-DB encryption | Implemented | SQLCipher with HKDF key split |
+| SFTP file transfer | Implemented | Upload/download with progress events |
+| Port forwarding | Implemented | Local (-L) and remote (-R) rules |
+| TOFU host verification | Implemented | Fingerprint comparison on mismatch |
+| Biometric unlock | Implemented | Windows Hello via TPM-backed key |
+| Multi-device sync | Implemented | E2E-encrypted, HTTP + S3 backends |
+| Team vault | Implemented | Host sharing, member key wrapping |
+| Plugin system | Implemented | Wasmtime WASM sandbox, capability-based |
+| Audit log | Implemented | Hash-chained, encrypted, per-host opt-in |
+| Mobile support | Implemented | Adaptive UI, Android config |
+| Snippets & templates | Implemented | Template variables, execute-to-session |
+| Theme system | Implemented | 3 built-in + custom theme support |
 
 ### Completed Phases
 
