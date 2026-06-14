@@ -41,7 +41,7 @@ pub async fn local_shell_spawn(
     };
 
     #[cfg(not(target_os = "windows"))]
-    let (cmd, args) = {
+    let (cmd, args): (String, Vec<String>) = {
         let shell = shell.unwrap_or_else(|| {
             std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
         });
