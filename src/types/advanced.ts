@@ -52,3 +52,19 @@ export interface ParsedHost {
   forwardAgent: boolean;
   compression: boolean;
 }
+
+export interface ConnectionDiagnostics {
+  hostname: string;
+  port: number;
+  dnsResolved: boolean;
+  dnsIp: string | null;
+  tcpConnected: boolean;
+  tcpLatencyMs: number | null;
+  sshBanner: string | null;
+  hostKeyVerified: boolean;
+  authMethod: string;
+  authSuccess: boolean;
+  ptyAllocated: boolean;
+  errorStage: string | null;
+  errorMessage: string | null;
+}

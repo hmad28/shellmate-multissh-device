@@ -214,6 +214,8 @@ pub fn run() {
             commands::local_shell::local_shell_list,
             // SSH Config Import
             commands::ssh_config::ssh_import_config,
+            // Connection Diagnostics
+            commands::diagnostics::connection_diagnose,
             // Host-to-Host Transfer
             commands::host_transfer::sftp_host_transfer,
         ])

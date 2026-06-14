@@ -43,7 +43,7 @@ import type {
 import type { Plugin, PluginCapability } from '@/types/plugin';
 import type { AuditEvent, AuditSettings, AuditQuery } from '@/types/audit';
 import type { ServerStats } from '@/types/server-stats';
-import type { SessionRecording, SessionEvent, SshKey, LocalSession, SftpTransfer, ParsedHost } from '@/types/advanced';
+import type { SessionRecording, SessionEvent, SshKey, LocalSession, SftpTransfer, ParsedHost, ConnectionDiagnostics } from '@/types/advanced';
 
 /**
  * Typed wrappers around Tauri `invoke`.
@@ -330,5 +330,9 @@ export const tauri = {
   sshConfig: {
     import: (content: string) =>
       invoke<ParsedHost[]>('ssh_import_config', { content }),
+  },
+  diagnostics: {
+    connection: (hostId: string) =>
+      invoke<ConnectionDiagnostics>('connection_diagnose', { hostId }),
   },
 } as const;
