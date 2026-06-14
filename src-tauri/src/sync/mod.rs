@@ -273,19 +273,21 @@ fn count_synced(conn: &Connection) -> AppResult<u32> {
 
 fn list_pending(conn: &Connection) -> AppResult<Vec<SyncEntityState>> {
     let mut stmt = conn.prepare("SELECT entity_type, entity_id, version_vector, last_synced_at, pending_change, remote_object_id FROM sync_state WHERE pending_change=1")?;
-    let mut result = Vec::new();
-    let mut rows = stmt.query([])?;
-    while let Some(row) = rows.next()? {
+    let rows = stmt.query_map([], |row| {
         let et: String = row.get(0)?;
         let vv: String = row.get(2)?;
-        result.push(SyncEntityState {
+        Ok(SyncEntityState {
             entity_type: EntityType::from_str(&et).unwrap_or(EntityType::Host),
             entity_id: row.get(1)?,
             version_vector: serde_json::from_str(&vv).unwrap_or_default(),
             last_synced_at: row.get(3)?,
             pending_change: row.get::<_, i64>(4)? != 0,
             remote_object_id: row.get(5)?,
-        });
+        })
+    })?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
     }
     Ok(result)
 }
