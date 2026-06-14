@@ -76,25 +76,38 @@ pub fn migrate_to_encrypted(
     // Step 1: Backup the original
     std::fs::copy(path, &backup_path)?;
 
-    // Step 2: Open the plaintext DB
-    let plaintext_conn = Connection::open(path)?;
-
-    // Step 3: Create a temp encrypted DB
+    // Step 2: Create a temp encrypted DB and ATTACH the plaintext DB.
     let temp_path = path.with_extension("db.encrypted");
     let key_hex = hex::encode(db_key);
+
+    // Remove stale temp file if it exists.
+    let _ = std::fs::remove_file(&temp_path);
+
     let encrypted_conn = Connection::open(&temp_path)?;
     encrypted_conn.execute_batch(&format!("PRAGMA key = 'x\"{key_hex}\"';"))?;
 
-    // Step 4: Use sqlcipher_export to copy all data
-    encrypted_conn.execute_batch("SELECT sqlcipher_export('main', 'main');")?;
+    // ATTACH the plaintext database with empty key.
+    let path_str = path.to_string_lossy().replace('\'', "''");
+    encrypted_conn.execute_batch(&format!(
+        "ATTACH DATABASE '{path_str}' AS plaintext KEY ''"
+    ))?;
 
-    // Step 5: Copy encrypted DB over original
-    encrypted_conn.close().map_err(|(_, e)| AppError::Internal(format!("close encrypted db: {e:?}")))?;
-    plaintext_conn.close().map_err(|(_, e)| AppError::Internal(format!("close plaintext db: {e:?}")))?;
+    // Export from the attached plaintext DB to the main encrypted DB.
+    encrypted_conn.execute_batch("SELECT sqlcipher_export('main', 'plaintext')")?;
+
+    encrypted_conn.execute_batch("DETACH DATABASE plaintext")?;
+
+    // Step 3: Copy encrypted DB over original
+    encrypted_conn
+        .close()
+        .map_err(|(_, e)| AppError::Internal(format!("close encrypted db: {e:?}")))?;
 
     std::fs::copy(&temp_path, path)?;
     std::fs::remove_file(&temp_path)?;
 
-    log::info!("Database migrated to SQLCipher. Backup at {}", backup_path.display());
+    log::info!(
+        "Database migrated to SQLCipher. Backup at {}",
+        backup_path.display()
+    );
     Ok(())
 }

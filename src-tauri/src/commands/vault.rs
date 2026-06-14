@@ -29,7 +29,23 @@ fn encrypt_and_swap_db(
     }
 
     // Open a new encrypted connection and swap it in.
-    let new_conn = db::open(db_path, Some(db_key))?;
+    // If this fails, the DB might be corrupted from a previous buggy migration.
+    // Try to recover from backup.
+    let new_conn = match db::open(db_path, Some(db_key)) {
+        Ok(conn) => conn,
+        Err(e) => {
+            log::warn!("Failed to open encrypted DB: {e}. Attempting recovery from backup.");
+            let backup_path = db_path.with_extension("db.bak");
+            if backup_path.exists() {
+                // Restore backup and re-migrate.
+                std::fs::copy(&backup_path, db_path)?;
+                db::migrate_to_encrypted(db_path, db_key)?;
+                db::open(db_path, Some(db_key))?
+            } else {
+                return Err(e);
+            }
+        }
+    };
     state.swap_db(new_conn);
     log::info!("Database reopened with SQLCipher encryption");
     Ok(())
