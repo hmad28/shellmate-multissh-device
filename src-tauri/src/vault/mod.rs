@@ -52,6 +52,11 @@ impl Vault {
         self.inner.read().db_key
     }
 
+    /// Returns the vault key if the vault is unlocked, None otherwise.
+    pub fn get_vault_key(&self) -> Option<[u8; 32]> {
+        self.inner.read().key
+    }
+
     pub fn record_activity(&self) {
         let mut inner = self.inner.write();
         inner.last_activity = Instant::now();

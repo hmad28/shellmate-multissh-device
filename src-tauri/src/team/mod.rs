@@ -127,8 +127,9 @@ impl TeamManager {
         Ok(())
     }
 
-    /// Add a member to a team. Wraps the team master key with the member's
-    /// public key (base64-encoded X25519 or similar).
+    /// Add a member to a team. Wraps the team master key with a per-member
+    /// secret. The wrapping key is derived from a random secret stored alongside
+    /// the member record, NOT from the public key string (which is not secret).
     pub fn add_member(
         conn: &Connection,
         vault: &Vault,
@@ -153,8 +154,13 @@ impl TeamManager {
         };
         let team_key = vault.decrypt(&blob)?;
 
-        // Derive a wrapping key from the member's public key.
-        let wrap_key = derive_member_wrap_key(&input.member_pubkey);
+        // Generate a random per-member wrapping secret.
+        // This secret is stored encrypted with the vault key alongside the member record.
+        // The wrapping key is derived from this secret via HKDF, NOT from the public key.
+        let mut member_secret = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut member_secret);
+
+        let wrap_key = derive_member_wrap_key(&member_secret);
         let cipher = Aes256Gcm::new_from_slice(&wrap_key)
             .map_err(|e| AppError::Internal(format!("AES init: {e}")))?;
 
@@ -171,6 +177,9 @@ impl TeamManager {
         wrapped_with_nonce.extend_from_slice(&member_nonce);
         wrapped_with_nonce.extend_from_slice(&wrapped_team_key);
 
+        // Encrypt the member secret with vault key for storage.
+        let encrypted_secret = vault.encrypt(&member_secret)?;
+
         let member_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
 
@@ -184,6 +193,17 @@ impl TeamManager {
                 input.member_label,
                 wrapped_with_nonce,
                 now,
+            ],
+        )?;
+
+        // Store the encrypted member secret in a separate table.
+        conn.execute(
+            "INSERT INTO team_member_secrets (member_id, encrypted_secret, secret_nonce)
+             VALUES (?1, ?2, ?3)",
+            rusqlite::params![
+                member_id,
+                encrypted_secret.ciphertext,
+                encrypted_secret.nonce.to_vec(),
             ],
         )?;
 
@@ -298,9 +318,10 @@ impl TeamManager {
     }
 }
 
-/// Derive a wrapping key from a member's public key string using HKDF.
-fn derive_member_wrap_key(pubkey: &str) -> [u8; 32] {
-    let hk = Hkdf::<Sha256>::new(Some(b"shellmate-team-member-v1"), pubkey.as_bytes());
+/// Derive a wrapping key from a random per-member secret using HKDF.
+/// The secret is stored encrypted with the vault key, NOT derived from public key.
+fn derive_member_wrap_key(member_secret: &[u8]) -> [u8; 32] {
+    let hk = Hkdf::<Sha256>::new(Some(b"shellmate-team-member-v1"), member_secret);
     let mut key = [0u8; 32];
     hk.expand(b"team-key-wrap", &mut key).expect("HKDF expand failed");
     key

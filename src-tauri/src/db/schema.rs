@@ -206,6 +206,12 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
 
     CREATE INDEX IF NOT EXISTS idx_team_shares_team ON team_shares(team_id);
     CREATE INDEX IF NOT EXISTS idx_team_shares_host ON team_shares(host_id);
+
+    CREATE TABLE IF NOT EXISTS team_member_secrets (
+        member_id TEXT PRIMARY KEY REFERENCES team_members(id) ON DELETE CASCADE,
+        encrypted_secret BLOB NOT NULL,
+        secret_nonce BLOB NOT NULL
+    );
     "#,
     ),
     (

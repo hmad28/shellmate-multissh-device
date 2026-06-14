@@ -1,7 +1,6 @@
 use crate::errors::AppResult;
 use crate::state::AppState;
-use crate::sync::{SyncConfig, SyncEngine, SyncResult, SyncStatus};
-use serde::Serialize;
+use crate::sync::{SyncResult, SyncStatus};
 use tauri::State;
 
 #[tauri::command]
@@ -20,7 +19,7 @@ pub async fn sync_configure(
     let conn = state.db.lock();
     state
         .sync
-        .configure(&conn, &backend_type, &endpoint_url, &credentials)
+        .configure(&conn, &state.vault, &backend_type, &endpoint_url, &credentials)
 }
 
 #[tauri::command]
