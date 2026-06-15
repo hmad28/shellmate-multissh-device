@@ -68,10 +68,11 @@ jobs:
           echo "OPENSSL_LIB_DIR=$(brew --prefix openssl)/lib" >> $GITHUB_ENV
           echo "OPENSSL_INCLUDE_DIR=$(brew --prefix openssl)/include" >> $GITHUB_ENV
 
-      - name: Set OpenSSL env (Windows)
+      - name: Install OpenSSL (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
+          choco install openssl -y --no-progress
           echo "OPENSSL_LIB_DIR=C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD" >> $env:GITHUB_ENV
           echo "OPENSSL_INCLUDE_DIR=C:\Program Files\OpenSSL-Win64\include" >> $env:GITHUB_ENV
 
