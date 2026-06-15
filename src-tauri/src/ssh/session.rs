@@ -104,6 +104,7 @@ impl SessionManager {
         self: &Arc<Self>,
         app: AppHandle,
         params: ConnectParams,
+        session_id: String,
     ) -> AppResult<String> {
         if self.count() >= MAX_SESSIONS {
             return Err(AppError::InvalidInput(format!(
@@ -111,7 +112,6 @@ impl SessionManager {
             )));
         }
 
-        let session_id = Uuid::new_v4().to_string();
         let (tx, rx) = mpsc::unbounded_channel::<OutboundMsg>();
 
         // Register before spawning so the frontend can reference the id immediately.

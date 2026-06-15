@@ -10,6 +10,7 @@ use tauri::{AppHandle, State};
 #[serde(rename_all = "camelCase")]
 pub struct ConnectByHostInput {
     pub host_id: String,
+    pub session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -33,6 +34,7 @@ pub struct QuickConnectInput {
     pub label: Option<String>,
     pub auth: QuickConnectAuth,
     pub shell: Option<String>,
+    pub session_id: Option<String>,
 }
 
 /// Open an SSH session for a saved host. Decrypts the credential via the
@@ -107,9 +109,10 @@ pub async fn ssh_connect(
         shell: None,
     };
 
+    let session_id = input.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let mgr = Arc::clone(&state.ssh);
     state.vault.record_activity();
-    mgr.open(app, params).await
+    mgr.open(app, params, session_id).await
 }
 
 /// Open an SSH session without saving the credential. Useful for testing /
@@ -138,8 +141,9 @@ pub async fn ssh_quick_connect(
         label: input.label,
         shell: input.shell,
     };
+    let session_id = input.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let mgr = Arc::clone(&state.ssh);
-    mgr.open(app, params).await
+    mgr.open(app, params, session_id).await
 }
 
 #[tauri::command]

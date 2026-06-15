@@ -22,6 +22,13 @@ interface SshStore {
   retryAttempt: (sessionId: string) => Promise<void>;
 }
 
+const generateSessionId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+};
+
 export const useSshStore = create<SshStore>((set, get) => ({
   sessionByTab: {},
   pendingAttempts: {},
@@ -55,13 +62,16 @@ export const useSshStore = create<SshStore>((set, get) => ({
   connectSaved: async (tabId, hostId) => {
     const { updateTabStatus } = useTabStore.getState();
     updateTabStatus(tabId, 'connecting');
+    const sessionId = generateSessionId();
+    get().bind(tabId, sessionId);
+    get().registerAttempt(sessionId, { tabId, type: 'saved', hostId });
     try {
-      const sessionId = await tauri.ssh.connect({ hostId });
-      get().bind(tabId, sessionId);
-      get().registerAttempt(sessionId, { tabId, type: 'saved', hostId });
+      await tauri.ssh.connect({ hostId, sessionId });
     } catch (err) {
       console.error('SSH connect failed', err);
       updateTabStatus(tabId, 'disconnected');
+      get().unbind(tabId);
+      get().removeAttempt(sessionId);
       throw err;
     }
   },
@@ -69,17 +79,20 @@ export const useSshStore = create<SshStore>((set, get) => ({
   connectQuick: async (tabId, params) => {
     const { updateTabStatus } = useTabStore.getState();
     updateTabStatus(tabId, 'connecting');
+    const sessionId = generateSessionId();
+    get().bind(tabId, sessionId);
+    get().registerAttempt(sessionId, {
+      tabId,
+      type: 'quick',
+      quickParams: params,
+    });
     try {
-      const sessionId = await tauri.ssh.quickConnect(params);
-      get().bind(tabId, sessionId);
-      get().registerAttempt(sessionId, {
-        tabId,
-        type: 'quick',
-        quickParams: params,
-      });
+      await tauri.ssh.quickConnect({ ...params, sessionId });
     } catch (err) {
       console.error('SSH connect failed', err);
       updateTabStatus(tabId, 'disconnected');
+      get().unbind(tabId);
+      get().removeAttempt(sessionId);
       throw err;
     }
   },

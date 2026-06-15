@@ -12,6 +12,7 @@ export interface BiometricStatus {
 
 export interface ConnectByHostInput {
   hostId: string;
+  sessionId?: string;
 }
 
 export type QuickConnectAuth =
@@ -25,6 +26,7 @@ export interface QuickConnectInput {
   label: string | null;
   auth: QuickConnectAuth;
   shell?: string;
+  sessionId?: string;
 }
 
 export type SshSessionStatus =
