@@ -1,8 +1,5 @@
 use crate::errors::AppResult;
 use crate::state::AppState;
-use async_trait::async_trait;
-use russh::client;
-use russh::keys::key::PublicKey;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -83,7 +80,7 @@ pub async fn server_stats_exec(
     host_id: String,
 ) -> AppResult<ServerStats> {
     // Load host config from DB.
-    let (hostname, port, username, auth_type, credential_id, label) = {
+    let (hostname, port, username, auth_type, credential_id, _label) = {
         let conn = state.db.lock();
         conn.query_row(
             "SELECT hostname, port, username, auth_type, credential_id, label FROM hosts WHERE id = ?1",
@@ -145,8 +142,9 @@ async fn exec_command_over_ssh(
     credential: &str,
     command: &str,
 ) -> AppResult<String> {
-use russh::client;
-use russh::keys::key::PublicKey;
+    use async_trait::async_trait;
+    use russh::client;
+    use russh::keys::key::PublicKey;
 
     struct ExecHandler;
 
