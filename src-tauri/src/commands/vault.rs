@@ -106,24 +106,34 @@ pub async fn vault_setup(
     state: State<'_, AppState>,
     password: String,
 ) -> AppResult<()> {
+    // Step 1: Setup vault in DB (writes verifier, salt, etc.)
     let db_key = {
         let conn = state.db.lock();
         state.vault.setup(&conn, &password)?
     };
 
-    // Write vault metadata file BEFORE encrypting DB.
+    // Step 2: Write vault metadata file BEFORE encrypting DB.
     write_meta_from_db(&state)?;
 
-    // Verify the vault file was written.
-    if !db::has_vault_meta(&state.db_path) {
-        return Err(crate::errors::AppError::Internal(
-            "vault metadata file was not written".into(),
-        ));
+    // Step 3: Drop the old connection before migration.
+    // The migration opens new connections to the same file.
+    {
+        let mut conn = state.db.lock();
+        // Force WAL checkpoint to flush all writes.
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").ok();
+        // Close the old connection by replacing with a temporary in-memory one.
+        let temp_conn = rusqlite::Connection::open_in_memory()
+            .map_err(|e| AppError::Internal(format!("temp conn: {e}")))?;
+        *conn = temp_conn;
     }
-    log::info!("Vault metadata file verified at {:?}", state.db_path.with_extension("vault"));
 
-    // Encrypt the database with the newly derived key.
-    encrypt_and_swap_db(&state, &db_key)?;
+    // Step 4: Migrate DB to encrypted and get new connection.
+    let db_path = &state.db_path;
+    if db::is_plaintext_db(db_path) {
+        db::migrate_to_encrypted(db_path, &db_key)?;
+    }
+    let new_conn = db::open(db_path, Some(&db_key))?;
+    state.swap_db(new_conn);
 
     Ok(())
 }
@@ -143,6 +153,14 @@ pub async fn vault_unlock(
         // Set vault keys in memory.
         state.vault.unlock_with_key(&master_key)?;
 
+        // Drop old connection before opening new one.
+        {
+            let mut conn = state.db.lock();
+            let temp_conn = rusqlite::Connection::open_in_memory()
+                .map_err(|e| AppError::Internal(format!("temp conn: {e}")))?;
+            *conn = temp_conn;
+        }
+
         // Open encrypted DB and swap.
         let new_conn = db::open(db_path, Some(&db_key))?;
         state.swap_db(new_conn);
@@ -153,8 +171,26 @@ pub async fn vault_unlock(
             let conn = state.db.lock();
             state.vault.unlock(&conn, &password)?
         };
-        encrypt_and_swap_db(&state, &db_key)?;
+
+        // Drop old connection before migration.
+        {
+            let mut conn = state.db.lock();
+            conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").ok();
+            let temp_conn = rusqlite::Connection::open_in_memory()
+                .map_err(|e| AppError::Internal(format!("temp conn: {e}")))?;
+            *conn = temp_conn;
+        }
+
+        // Migrate and swap.
+        if db::is_plaintext_db(db_path) {
+            db::migrate_to_encrypted(db_path, &db_key)?;
+        }
+        let new_conn = db::open(db_path, Some(&db_key))?;
+        state.swap_db(new_conn);
     }
+
+    Ok(())
+}
 
     Ok(())
 }
