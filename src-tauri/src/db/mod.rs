@@ -143,6 +143,13 @@ pub fn migrate_to_encrypted(
 ) -> AppResult<()> {
     let backup_path = path.with_extension("db.bak");
 
+    // Step 0: Checkpoint WAL to flush all pending writes to the main DB file.
+    {
+        let flush_conn = Connection::open(path)?;
+        flush_conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")?;
+        flush_conn.close().map_err(|(_, e)| AppError::Internal(format!("flush close: {e:?}")))?;
+    }
+
     // Step 1: Backup the original
     std::fs::copy(path, &backup_path)?;
 
