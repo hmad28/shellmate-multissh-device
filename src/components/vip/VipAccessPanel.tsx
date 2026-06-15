@@ -189,11 +189,11 @@ export function VipAccessPanel() {
                 <strong>Local Network:</strong> Make sure your phone and desktop are on the same Wi-Fi network (or connected via a VPN like Tailscale).
               </li>
               <li>
-                <strong>Connect:</strong> Open the app on your phone. You will see <span className="text-[var(--color-accent)] font-semibold">"VIP Localhost"</span> (or <span className="text-[var(--color-accent)] font-semibold">"VIP Localhost (Admin)"</span>) in your Hosts list. Tap it to launch the terminal!
+                <strong>Connect:</strong> Open the app on your phone. You will see <span className="text-[var(--color-accent)] font-semibold">&quot;VIP Localhost&quot;</span> (or <span className="text-[var(--color-accent)] font-semibold">&quot;VIP Localhost (Admin)&quot;</span>) in your Hosts list. Tap it to launch the terminal!
               </li>
             </ol>
             <p className="mt-1 text-[10px] text-fg-muted bg-bg-elevated/40 p-1.5 rounded border border-[var(--color-border)]">
-              💡 <em>Note:</em> Make sure your desktop's OpenSSH Server is running. If you haven't started it yet, refer to the <a href="file:///C:/Users/Pongo/.gemini/antigravity-cli/brain/ac930051-3258-4ee8-9d72-6261b2fb8265/vip_administrator_access_guide.md" className="text-[var(--color-accent)] underline">VIP Access Guide</a> for easy setup commands.
+              💡 <em>Note:</em> Make sure your desktop&apos;s OpenSSH Server is running. If you haven&apos;t started it yet, refer to the <a href="file:///C:/Users/Pongo/.gemini/antigravity-cli/brain/ac930051-3258-4ee8-9d72-6261b2fb8265/vip_administrator_access_guide.md" className="text-[var(--color-accent)] underline">VIP Access Guide</a> for easy setup commands.
             </p>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { tauri } from '@/lib/tauri';
 import { useTabStore } from './tab-store';
+import { useToastStore } from './toast-store';
 
 export interface ConnectionAttempt {
   tabId: string;
@@ -72,6 +73,7 @@ export const useSshStore = create<SshStore>((set, get) => ({
       updateTabStatus(tabId, 'disconnected');
       get().unbind(tabId);
       get().removeAttempt(sessionId);
+      useToastStore.getState().addToast('error', `Connection failed: ${err}`);
       throw err;
     }
   },
@@ -93,6 +95,7 @@ export const useSshStore = create<SshStore>((set, get) => ({
       updateTabStatus(tabId, 'disconnected');
       get().unbind(tabId);
       get().removeAttempt(sessionId);
+      useToastStore.getState().addToast('error', `Connection failed: ${err}`);
       throw err;
     }
   },
