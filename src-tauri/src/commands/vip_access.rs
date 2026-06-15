@@ -73,10 +73,17 @@ pub async fn vip_generate_keypair(
     let pubkey_hex = hex::encode(verifying_key.as_bytes());
     let privkey_bytes = signing_key.to_bytes();
 
+    // Format private key as OpenSSH PEM
+    let priv_b64 = base64::engine::general_purpose::STANDARD.encode(&privkey_bytes);
+    let priv_pem = format!(
+        "-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----",
+        priv_b64
+    );
+
     // Encrypt private key with vault and store as credential
     let credential_id = {
         let conn = app_state.db.lock();
-        let encrypted = app_state.vault.encrypt(&privkey_bytes)?;
+        let encrypted = app_state.vault.encrypt(priv_pem.as_bytes())?;
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
