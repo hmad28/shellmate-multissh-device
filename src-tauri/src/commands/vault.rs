@@ -1,5 +1,5 @@
 use crate::db;
-use crate::errors::AppResult;
+use crate::errors::{AppError, AppResult};
 use crate::state::AppState;
 use crate::vault::Vault;
 use serde::Serialize;
