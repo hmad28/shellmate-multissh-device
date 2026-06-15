@@ -73,8 +73,27 @@ jobs:
         shell: pwsh
         run: |
           choco install openssl -y --no-progress
-          echo "OPENSSL_LIB_DIR=C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD" >> $env:GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=C:\Program Files\OpenSSL-Win64\include" >> $env:GITHUB_ENV
+          # OpenSSL installed by chocolatey to C:\Program Files\OpenSSL-Win64
+          # Runner pre-installed OpenSSL at C:\Program Files\OpenSSL
+          # Try both paths
+          $libDir = if (Test-Path "C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD") {
+            "C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD"
+          } elseif (Test-Path "C:\Program Files\OpenSSL\lib\VC\x64\MD") {
+            "C:\Program Files\OpenSSL\lib\VC\x64\MD"
+          } elseif (Test-Path "C:\Program Files\OpenSSL\lib") {
+            "C:\Program Files\OpenSSL\lib"
+          } else {
+            "C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD"
+          }
+          $incDir = if (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+            "C:\Program Files\OpenSSL-Win64\include"
+          } elseif (Test-Path "C:\Program Files\OpenSSL\include") {
+            "C:\Program Files\OpenSSL\include"
+          } else {
+            "C:\Program Files\OpenSSL-Win64\include"
+          }
+          echo "OPENSSL_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=$incDir" >> $env:GITHUB_ENV
 
       - name: Cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml
