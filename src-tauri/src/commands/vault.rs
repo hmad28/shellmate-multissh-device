@@ -192,9 +192,6 @@ pub async fn vault_unlock(
     Ok(())
 }
 
-    Ok(())
-}
-
 #[tauri::command]
 pub async fn vault_lock(state: State<'_, AppState>) -> AppResult<()> {
     state.vault.lock();
