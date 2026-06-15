@@ -9,7 +9,7 @@ use russh::ChannelMsg;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -309,38 +309,94 @@ async fn run_session(
     emit_status(&app, &session_id, SessionStatus::Connected, None);
 
     // Main I/O loop. Two select arms:
-    //   - inbound from server channel  -> emit to frontend as `ssh:output:{id}`
+    //   - inbound from server channel  -> buffer; emit batched `ssh:output:{id}` events
     //   - outbound from frontend       -> write to channel
+    //
+    // We batch output to avoid one Tauri IPC event per SSH packet. At high
+    // throughput (e.g. `cat large_file`) the server can deliver thousands of
+    // small packets per second; emitting each one synchronously via Tauri
+    // saturates the IPC channel and stalls the renderer. Coalesce up to 32KB
+    // or 12ms of data per event.
+    const FLUSH_BYTES: usize = 32 * 1024;
+    const FLUSH_INTERVAL: Duration = Duration::from_millis(12);
+    let mut pending: Vec<u8> = Vec::with_capacity(FLUSH_BYTES);
+    let mut last_flush = Instant::now();
+    let mut next_flush_at: Option<Instant> = None;
+
+    let flush_now = |buf: &mut Vec<u8>| {
+        if buf.is_empty() {
+            return;
+        }
+        let data = match std::str::from_utf8(buf) {
+            Ok(s) => s.to_owned(),
+            Err(_) => String::from_utf8_lossy(buf).into_owned(),
+        };
+        buf.clear();
+        emit_output(&app, &session_id, data);
+    };
+
     loop {
+        // Compute the timer arm target. Reset to None when buffer is empty.
+        if pending.is_empty() {
+            next_flush_at = None;
+        } else if next_flush_at.is_none() {
+            next_flush_at = Some(Instant::now() + FLUSH_INTERVAL);
+        }
+
+        let timer_arm = next_flush_at.unwrap_or_else(|| Instant::now() + Duration::from_secs(3600));
+
         tokio::select! {
+            biased;
+
+            _ = tokio::time::sleep_until(timer_arm.into()), if !pending.is_empty() => {
+                last_flush = Instant::now();
+                next_flush_at = None;
+                flush_now(&mut pending);
+            }
+
             msg = rx.recv() => {
                 match msg {
                     Some(OutboundMsg::Data(bytes)) => {
                         if channel.data(bytes.as_slice()).await.is_err() {
+                            flush_now(&mut pending);
                             break;
                         }
                     }
                     Some(OutboundMsg::Resize { cols, rows }) => {
                         let _ = channel.window_change(cols, rows, 0, 0).await;
                     }
-                    Some(OutboundMsg::Close) | None => break,
+                    Some(OutboundMsg::Close) | None => {
+                        flush_now(&mut pending);
+                        break;
+                    }
                 }
             }
+
             ev = channel.wait() => {
                 match ev {
                     Some(ChannelMsg::Data { data }) => {
-                        let chunk = String::from_utf8_lossy(&data).to_string();
-                        emit_output(&app, &session_id, chunk);
+                        pending.extend_from_slice(&data);
+                        if pending.len() >= FLUSH_BYTES {
+                            last_flush = Instant::now();
+                            next_flush_at = None;
+                            flush_now(&mut pending);
+                        }
                     }
                     Some(ChannelMsg::ExtendedData { data, .. }) => {
-                        // stderr (extended data type 1)
-                        let chunk = String::from_utf8_lossy(&data).to_string();
-                        emit_output(&app, &session_id, chunk);
+                        pending.extend_from_slice(&data);
+                        if pending.len() >= FLUSH_BYTES {
+                            last_flush = Instant::now();
+                            next_flush_at = None;
+                            flush_now(&mut pending);
+                        }
                     }
                     Some(ChannelMsg::ExitStatus { exit_status }) => {
                         log::info!("session {session_id} remote exit_status={exit_status}");
                     }
-                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
+                        flush_now(&mut pending);
+                        break;
+                    }
                     _ => {}
                 }
             }

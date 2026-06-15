@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use tauri::State;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,7 +23,7 @@ pub async fn local_shell_spawn(
     let session_id = uuid::Uuid::new_v4().to_string();
 
     #[cfg(target_os = "windows")]
-    let (cmd, args) = {
+    let (cmd, args): (String, Vec<String>) = {
         let shell = shell.unwrap_or_else(|| {
             if std::path::Path::new("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe").exists() {
                 "powershell".to_string()
@@ -48,12 +48,20 @@ pub async fn local_shell_spawn(
         (shell, vec![])
     };
 
-    let child = Command::new(&cmd)
+    let mut cmd_builder = Command::new(&cmd);
+    cmd_builder
         .args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+
+    #[cfg(target_os = "windows")]
+    {
+        cmd_builder.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let child = cmd_builder
         .spawn()
         .map_err(|e| crate::errors::AppError::Internal(format!("spawn {cmd}: {e}")))?;
 

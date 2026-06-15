@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -106,31 +106,68 @@ export function Terminal({ tabId, sessionId }: TerminalProps) {
     const statusName = `ssh:status:${sessionId}`;
     const errorName = `ssh:error:${sessionId}`;
 
-    let unlisten: UnlistenFn[] = [];
+    // Batch xterm writes per animation frame. Backend already coalesces SSH
+    // chunks into ~12ms / 32KB events, but a noisy session (e.g. `cat big
+    // file`) can still produce many IPC events per frame. Accumulating
+    // strings and writing once per frame keeps xterm's parser from being
+    // invoked on every event and prevents the stutter that looks like
+    // the terminal "refreshing".
+    let writeBuf = '';
+    let writeScheduled = false;
+    const flushWrites = () => {
+      writeScheduled = false;
+      if (writeBuf.length > 0) {
+        const data = writeBuf;
+        writeBuf = '';
+        term.write(data);
+      }
+    };
+    const scheduleWrite = (chunk: string) => {
+      writeBuf += chunk;
+      if (!writeScheduled) {
+        writeScheduled = true;
+        requestAnimationFrame(flushWrites);
+      }
+    };
+
+    // Track listeners via a ref so the cleanup function captures the
+    // LATEST array (post-Promise resolution), not the empty initial. Without
+    // this, if the effect re-runs (e.g. sessionId change) the previous
+    // listeners are NEVER unregistered and accumulate forever, multiplying
+    // IPC fan-out.
+    const unlistenRef: { current: UnlistenFn[] } = { current: [] };
+    let mounted = true;
+
     void Promise.all([
       listen<SshOutputEvent>(outputName, (e) => {
-        term.write(e.payload.data);
+        scheduleWrite(e.payload.data);
       }),
       listen<SshStatusEvent>(statusName, (e) => {
         updateTabStatus(tabId, STATUS_TO_TAB[e.payload.status]);
         if (e.payload.status === 'failed' && e.payload.message) {
-          term.write(`\r\n\x1b[31m[error] ${e.payload.message}\x1b[0m\r\n`);
+          scheduleWrite(`\r\n\x1b[31m[error] ${e.payload.message}\x1b[0m\r\n`);
         }
         if (e.payload.status === 'disconnected') {
-          term.write('\r\n\x1b[33m[session ended]\x1b[0m\r\n');
+          scheduleWrite('\r\n\x1b[33m[session ended]\x1b[0m\r\n');
         }
       }),
       listen<{ sessionId: string; message: string }>(errorName, (e) => {
-        term.write(`\r\n\x1b[31m[error] ${e.payload.message}\x1b[0m\r\n`);
+        scheduleWrite(`\r\n\x1b[31m[error] ${e.payload.message}\x1b[0m\r\n`);
       }),
     ]).then((fns) => {
-      unlisten = fns;
+      if (!mounted) {
+        // Effect already cleaned up — unregister immediately.
+        for (const fn of fns) fn();
+      } else {
+        unlistenRef.current = fns;
+      }
     });
 
     term.focus();
 
     return () => {
-      unlisten.forEach((fn) => fn());
+      mounted = false;
+      for (const fn of unlistenRef.current) fn();
       onDataDisposable.dispose();
       onResizeDisposable.dispose();
       resizeObserver?.disconnect();
@@ -147,3 +184,10 @@ export function Terminal({ tabId, sessionId }: TerminalProps) {
     </div>
   );
 }
+
+// Memoize so re-renders of parent components (PaneView, HostsContent)
+// don't cascade into this component, which would otherwise re-run the
+// component body and re-evaluate every JSX node. The xterm instance is
+// managed via refs and survives parent re-renders, but unmount/remount
+// of <Terminal> is catastrophic (terminal "re-opens" visually).
+export default React.memo(Terminal);

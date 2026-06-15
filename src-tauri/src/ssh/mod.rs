@@ -4,4 +4,4 @@ pub mod reconnect;
 pub mod session;
 
 pub use broadcast::BroadcastManager;
-pub use session::{ConnectParams, SessionManager};
+pub use session::SessionManager;

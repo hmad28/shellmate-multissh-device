@@ -4,6 +4,7 @@ use crate::state::AppState;
 use crate::vault::Vault;
 use serde::Serialize;
 use tauri::State;
+use zeroize::Zeroize;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,35 +16,19 @@ pub struct VaultStatus {
 
 /// After obtaining the db_key (from setup or unlock), migrate the database to
 /// SQLCipher if it is still plaintext, then reopen the encrypted connection and
-/// swap it into AppState.
+/// swap it into AppState. `db::open` auto-recovers from `.bak` on failure.
 fn encrypt_and_swap_db(
     state: &AppState,
     db_key: &[u8; 32],
 ) -> AppResult<()> {
     let db_path = &state.db_path;
 
-    // Check if the DB is still plaintext (pre-Phase-7 builds).
     if db::is_plaintext_db(db_path) {
         log::info!("Migrating plaintext database to SQLCipher encryption");
         db::migrate_to_encrypted(db_path, db_key)?;
     }
 
-    // Open a new encrypted connection and swap it in.
-    // If this fails, try to recover from backup.
-    let new_conn = match db::open(db_path, Some(db_key)) {
-        Ok(conn) => conn,
-        Err(e) => {
-            log::warn!("Failed to open encrypted DB: {e}. Attempting recovery.");
-            let backup_path = db_path.with_extension("db.bak");
-            if backup_path.exists() {
-                std::fs::copy(&backup_path, db_path)?;
-                db::migrate_to_encrypted(db_path, db_key)?;
-                db::open(db_path, Some(db_key))?
-            } else {
-                return Err(e);
-            }
-        }
-    };
+    let new_conn = db::open(db_path, Some(db_key))?;
     state.swap_db(new_conn);
     log::info!("Database reopened with SQLCipher encryption");
     Ok(())
@@ -112,14 +97,10 @@ pub async fn vault_setup(
         state.vault.setup(&conn, &password)?
     };
 
-    // Step 2: Write vault metadata file BEFORE encrypting DB.
-    write_meta_from_db(&state)?;
-
-    // Step 3: Drop the old connection before migration.
-    // The migration opens new connections to the same file.
+    // Step 2: Drop the old connection and flush WAL so the on-disk plaintext
+    // file contains all vault settings before migration reads it.
     {
         let mut conn = state.db.lock();
-        // Force WAL checkpoint to flush all writes.
         conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").ok();
         // Close the old connection by replacing with a temporary in-memory one.
         let temp_conn = rusqlite::Connection::open_in_memory()
@@ -127,13 +108,25 @@ pub async fn vault_setup(
         *conn = temp_conn;
     }
 
-    // Step 4: Migrate DB to encrypted and get new connection.
+    // Step 3: Migrate DB to encrypted (if still plaintext) and reopen with key.
+    // IMPORTANT: write the .vault metadata file ONLY after a successful
+    // migration + open, otherwise the next launch will see a stale .vault file
+    // for a plaintext DB and fail with "file is not a database" when trying
+    // to open it with SQLCipher. db::open auto-recovers from .bak on failure.
     let db_path = &state.db_path;
     if db::is_plaintext_db(db_path) {
         db::migrate_to_encrypted(db_path, &db_key)?;
     }
     let new_conn = db::open(db_path, Some(&db_key))?;
     state.swap_db(new_conn);
+
+    // Step 4: Now that the encrypted DB is open and verified, persist the
+    // .vault metadata file so future launches know to prompt for unlock.
+    if let Err(e) = write_meta_from_db(&state) {
+        // Don't fail setup if meta write fails — the encrypted DB is fine and
+        // we can reconstruct meta from the verifier settings on next launch.
+        log::warn!("Failed to write vault metadata file: {e}");
+    }
 
     Ok(())
 }
@@ -149,6 +142,7 @@ pub async fn vault_unlock(
         // DB is encrypted. Verify password from metadata file, then open DB.
         let master_key = Vault::verify_from_meta(db_path, &password)?;
         let (vault_key, db_key) = crate::crypto::derive_vault_and_db_keys(&master_key);
+        let mut master_key = master_key;
 
         // Set vault keys in memory.
         state.vault.unlock_with_key(&master_key)?;
@@ -161,34 +155,70 @@ pub async fn vault_unlock(
             *conn = temp_conn;
         }
 
-        // Open encrypted DB and swap.
-        let new_conn = db::open(db_path, Some(&db_key))?;
+        // Open encrypted DB and swap. If the on-disk file is unreadable (broken
+        // header from older buggy builds, or the key was rotated) db::open
+        // automatically restores from `.bak`. As a last resort, if the file is
+        // actually plaintext despite having a .vault file (e.g. metadata is
+        // stale), strip .vault and run the plaintext unlock path.
+        let open_result = db::open(db_path, Some(&db_key));
+        let new_conn = match open_result {
+            Ok(conn) => conn,
+            Err(e) => {
+                log::warn!("Failed to open encrypted DB on unlock: {e}");
+                if db::is_plaintext_db(db_path) {
+                    log::info!("Stale vault metadata file detected; removing and switching to plaintext unlock");
+                    db::remove_vault_meta(db_path);
+                    state.vault.lock();
+                    master_key.zeroize();
+                    return unlock_plaintext(&state, db_path, &password);
+                }
+                return Err(e);
+            }
+        };
         state.swap_db(new_conn);
+        master_key.zeroize();
         log::info!("Vault unlocked via metadata file, DB reopened encrypted");
     } else {
-        // Plaintext DB — use the old flow.
-        let db_key = {
-            let conn = state.db.lock();
-            state.vault.unlock(&conn, &password)?
-        };
-
-        // Drop old connection before migration.
-        {
-            let mut conn = state.db.lock();
-            conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").ok();
-            let temp_conn = rusqlite::Connection::open_in_memory()
-                .map_err(|e| AppError::Internal(format!("temp conn: {e}")))?;
-            *conn = temp_conn;
-        }
-
-        // Migrate and swap.
-        if db::is_plaintext_db(db_path) {
-            db::migrate_to_encrypted(db_path, &db_key)?;
-        }
-        let new_conn = db::open(db_path, Some(&db_key))?;
-        state.swap_db(new_conn);
+        return unlock_plaintext(&state, db_path, &password);
     }
 
+    Ok(())
+}
+
+/// Plaintext-DB unlock + migration path. Extracted so it can also be called
+/// when a stale .vault file is detected on the encrypted path.
+fn unlock_plaintext(
+    state: &AppState,
+    db_path: &std::path::Path,
+    password: &str,
+) -> AppResult<()> {
+    let db_key = {
+        let conn = state.db.lock();
+        state.vault.unlock(&conn, password)?
+    };
+
+    // Drop old connection before migration.
+    {
+        let mut conn = state.db.lock();
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").ok();
+        let temp_conn = rusqlite::Connection::open_in_memory()
+            .map_err(|e| AppError::Internal(format!("temp conn: {e}")))?;
+        *conn = temp_conn;
+    }
+
+    // Migrate and swap. Only write .vault meta AFTER a successful open of the
+    // encrypted DB, otherwise next launch will see a stale .vault for a
+    // still-plaintext DB and crash with "file is not a database". db::open
+    // auto-recovers from `.bak` if the post-migration file is unreadable.
+    if db::is_plaintext_db(db_path) {
+        db::migrate_to_encrypted(db_path, &db_key)?;
+    }
+    let new_conn = db::open(db_path, Some(&db_key))?;
+    state.swap_db(new_conn);
+
+    if let Err(e) = write_meta_from_db(state) {
+        log::warn!("Failed to write vault metadata file: {e}");
+    }
     Ok(())
 }
 

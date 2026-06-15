@@ -12,7 +12,6 @@ use parking_lot::Mutex;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::process::Child;
 
 pub struct AppState {
     pub db: Arc<Mutex<Connection>>,

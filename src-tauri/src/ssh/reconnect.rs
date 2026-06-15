@@ -1,4 +1,3 @@
-use crate::errors::AppResult;
 use crate::known_hosts::KnownHostsManager;
 use crate::ssh::handler::ClientHandler;
 use crate::ssh::session::{AuthMaterial, ConnectParams};

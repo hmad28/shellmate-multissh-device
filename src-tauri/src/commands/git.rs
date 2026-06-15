@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::process::Command;
+use tokio::process::Command;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -11,14 +11,24 @@ pub struct GitInfo {
 }
 
 #[tauri::command]
-pub fn git_get_info(path: Option<String>) -> GitInfo {
+pub async fn git_get_info(path: Option<String>) -> GitInfo {
     let dir = path.as_deref().unwrap_or(".");
-    let branch = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], dir);
-    let has_changes = run_git(&["status", "--porcelain"], dir)
+    let branch = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], dir).await;
+    
+    if branch.is_none() {
+        return GitInfo {
+            branch: None,
+            has_changes: false,
+            ahead: 0,
+            behind: 0,
+        };
+    }
+
+    let has_changes = run_git(&["status", "--porcelain"], dir).await
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
 
-    let (ahead, behind) = match run_git(&["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], dir) {
+    let (ahead, behind) = match run_git(&["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], dir).await {
         Some(output) => {
             let parts: Vec<&str> = output.trim().split('\t').collect();
             (
@@ -37,12 +47,17 @@ pub fn git_get_info(path: Option<String>) -> GitInfo {
     }
 }
 
-fn run_git(args: &[&str], dir: &str) -> Option<String> {
-    Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
+async fn run_git(args: &[&str], dir: &str) -> Option<String> {
+    let mut cmd = Command::new("git");
+    cmd.args(args).current_dir(dir);
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let output = cmd.output().await.ok()?;
+    if output.status.success() {
+        String::from_utf8(output.stdout).ok()
+    } else {
+        None
+    }
 }

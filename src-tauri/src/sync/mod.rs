@@ -73,6 +73,11 @@ pub struct SyncResult {
     pub downloaded: u32,
     pub conflicts: u32,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncPayloadWrapper {
+    pub metadata: SyncEntityState,
+    pub entity_data: String,
+}
 
 pub struct SyncEngine {
     device_id: RwLock<Option<String>>,
@@ -184,54 +189,106 @@ impl SyncEngine {
                 .ok_or_else(|| AppError::Internal("vault key not available".into()))?;
             derive_sync_payload_key(&vault_key)
         };
-        let device_id = { let conn = state.db.lock(); self.device_id(&conn) };
+        let _device_id = { let conn = state.db.lock(); self.device_id(&conn) };
         let mut uploaded = 0u32;
         let mut downloaded = 0u32;
         let mut conflicts = 0u32;
 
+        let backend: std::sync::Arc<dyn backend::SyncBackend> = std::sync::Arc::from(backend);
+
         // Phase 1: Upload pending.
         let pending = { let conn = state.db.lock(); list_pending(&conn)? };
-        for entity in &pending {
-            let payload = { let conn = state.db.lock(); export_entity(&conn, entity)? };
+        let mut upload_futures = Vec::new();
+        
+        for entity in pending {
+            let payload = { let conn = state.db.lock(); export_entity(&conn, &entity)? };
             if let Some(payload) = payload {
-                let encrypted = encrypt::encrypt_payload(&payload, &sync_key)?;
+                let entity_data = String::from_utf8(payload).unwrap_or_default();
+                let wrapper = SyncPayloadWrapper {
+                    metadata: entity.clone(),
+                    entity_data,
+                };
+                let wrapper_bytes = serde_json::to_vec(&wrapper)
+                    .map_err(|e| AppError::Internal(format!("failed to serialize sync wrapper: {e}")))?;
+                let encrypted = encrypt::encrypt_payload(&wrapper_bytes, &sync_key)?;
                 let object_id = entity.remote_object_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-                backend.put(&object_id, &encrypted).await?;
+                let backend = backend.clone();
+                let fut = async move {
+                    backend.put(&object_id, &encrypted).await?;
+                    Ok::<_, AppError>((entity, object_id))
+                };
+                upload_futures.push(fut);
+            }
+        }
+        
+        let upload_results = futures::future::join_all(upload_futures).await;
+        
+        // Process upload results in a transaction.
+        {
+            let mut conn = state.db.lock();
+            let tx = conn.transaction()?;
+            for res in upload_results {
+                let (entity, object_id) = res?;
                 let now = chrono::Utc::now().to_rfc3339();
-                let conn = state.db.lock();
-                conn.execute("UPDATE sync_state SET pending_change=0, remote_object_id=?1, last_synced_at=?2 WHERE entity_type=?3 AND entity_id=?4",
-                    rusqlite::params![object_id, now, entity.entity_type.as_str(), entity.entity_id])?;
+                tx.execute(
+                    "UPDATE sync_state SET pending_change=0, remote_object_id=?1, last_synced_at=?2 WHERE entity_type=?3 AND entity_id=?4",
+                    rusqlite::params![object_id, now, entity.entity_type.as_str(), entity.entity_id],
+                )?;
                 uploaded += 1;
             }
+            tx.commit()?;
         }
 
         // Phase 2: Download remote.
         let remote_objects = backend.list().await?;
-        for object_id in &remote_objects {
-            let encrypted = backend.get(object_id).await?;
-            let payload = encrypt::decrypt_payload(&encrypted, &sync_key)?;
-            let remote_entity: SyncEntityState = serde_json::from_slice(&payload)
-                .map_err(|e| AppError::Internal(format!("invalid sync payload: {e}")))?;
-            let local_state = { let conn = state.db.lock(); get_entity_state(&conn, remote_entity.entity_type, &remote_entity.entity_id)? };
-            match local_state {
-                Some(local) => {
-                    if conflict::has_conflict(&local.version_vector, &remote_entity.version_vector) {
-                        match conflict::resolve_lww(&local, &remote_entity) {
-                            conflict::Resolution::UseLocal => { conflicts += 1; }
-                            conflict::Resolution::UseRemote => {
-                                let conn = state.db.lock(); import_entity(&conn, &remote_entity, &payload)?; downloaded += 1;
+        let mut download_futures = Vec::new();
+        for object_id in remote_objects {
+            let backend = backend.clone();
+            let fut = async move {
+                let data = backend.get(&object_id).await?;
+                Ok::<_, AppError>((object_id, data))
+            };
+            download_futures.push(fut);
+        }
+        
+        let download_results = futures::future::join_all(download_futures).await;
+        
+        {
+            let mut conn = state.db.lock();
+            let tx = conn.transaction()?;
+            for res in download_results {
+                let (_object_id, encrypted) = res?;
+                let wrapper_bytes = encrypt::decrypt_payload(&encrypted, &sync_key)?;
+                let wrapper: SyncPayloadWrapper = serde_json::from_slice(&wrapper_bytes)
+                    .map_err(|e| AppError::Internal(format!("invalid sync wrapper: {e}")))?;
+                let remote_entity = wrapper.metadata;
+                let payload = wrapper.entity_data.as_bytes();
+                
+                let local_state = get_entity_state(&tx, remote_entity.entity_type, &remote_entity.entity_id)?;
+                match local_state {
+                    Some(local) => {
+                        if conflict::has_conflict(&local.version_vector, &remote_entity.version_vector) {
+                            match conflict::resolve_lww(&local, &remote_entity) {
+                                conflict::Resolution::UseLocal => { conflicts += 1; }
+                                conflict::Resolution::UseRemote => {
+                                    import_entity(&tx, &remote_entity, payload)?; downloaded += 1;
+                                }
                             }
+                        } else if conflict::is_remote_newer(&local.version_vector, &remote_entity.version_vector) {
+                            import_entity(&tx, &remote_entity, payload)?; downloaded += 1;
                         }
-                    } else if conflict::is_remote_newer(&local.version_vector, &remote_entity.version_vector) {
-                        let conn = state.db.lock(); import_entity(&conn, &remote_entity, &payload)?; downloaded += 1;
                     }
+                    None => { import_entity(&tx, &remote_entity, payload)?; downloaded += 1; }
                 }
-                None => { let conn = state.db.lock(); import_entity(&conn, &remote_entity, &payload)?; downloaded += 1; }
             }
+            tx.commit()?;
         }
 
-        { let now = chrono::Utc::now().to_rfc3339(); let conn = state.db.lock();
-          conn.execute("UPDATE sync_config SET last_sync_at=?1 WHERE id='default'", [now])?; }
+        {
+            let now = chrono::Utc::now().to_rfc3339();
+            let conn = state.db.lock();
+            conn.execute("UPDATE sync_config SET last_sync_at=?1 WHERE id='default'", [now])?;
+        }
         Ok(SyncResult { uploaded, downloaded, conflicts })
     }
 }
@@ -317,7 +374,7 @@ fn get_entity_state(conn: &Connection, entity_type: EntityType, entity_id: &str)
 
 fn export_entity(conn: &Connection, entity: &SyncEntityState) -> AppResult<Option<Vec<u8>>> {
     let data = match entity.entity_type {
-        EntityType::Host => conn.query_row("SELECT json_object('id',id,'label',label,'hostname',hostname,'port',port,'username',username,'auth_type',auth_type,'group_id',group_id,'tags',tags,'notes',notes,'created_at',created_at,'updated_at',updated_at) FROM hosts WHERE id=?1", [&entity.entity_id], |r| r.get::<_, String>(0)).ok(),
+        EntityType::Host => conn.query_row("SELECT json_object('id',id,'label',label,'hostname',hostname,'port',port,'username',username,'auth_type',auth_type,'credential_id',credential_id,'group_id',group_id,'tags',tags,'notes',notes,'created_at',created_at,'updated_at',updated_at) FROM hosts WHERE id=?1", [&entity.entity_id], |r| r.get::<_, String>(0)).ok(),
         EntityType::Group => conn.query_row("SELECT json_object('id',id,'name',name,'color',color,'parent_id',parent_id,'sort_order',sort_order) FROM groups WHERE id=?1", [&entity.entity_id], |r| r.get::<_, String>(0)).ok(),
         EntityType::Snippet => conn.query_row("SELECT json_object('id',id,'title',title,'command',command,'description',description,'tags',tags,'created_at',created_at,'updated_at',updated_at) FROM snippets WHERE id=?1", [&entity.entity_id], |r| r.get::<_, String>(0)).ok(),
         EntityType::Setting => conn.query_row("SELECT json_object('key',key,'value',value) FROM settings WHERE key=?1", [&entity.entity_id], |r| r.get::<_, String>(0)).ok(),
@@ -335,5 +392,108 @@ fn import_entity(conn: &Connection, entity: &SyncEntityState, _payload: &[u8]) -
          ON CONFLICT(entity_type, entity_id) DO UPDATE SET version_vector=excluded.version_vector, last_synced_at=excluded.last_synced_at, pending_change=0, remote_object_id=excluded.remote_object_id",
         rusqlite::params![entity.entity_type.as_str(), entity.entity_id, vv_json, now, entity.remote_object_id],
     )?;
+
+    match entity.entity_type {
+        EntityType::Host => {
+            let val: serde_json::Value = serde_json::from_slice(_payload)?;
+            let id = val.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let label = val.get("label").and_then(|v| v.as_str()).unwrap_or("");
+            let hostname = val.get("hostname").and_then(|v| v.as_str()).unwrap_or("");
+            let port = val.get("port").and_then(|v| v.as_i64()).unwrap_or(22);
+            let username = val.get("username").and_then(|v| v.as_str()).unwrap_or("");
+            let auth_type = val.get("auth_type").and_then(|v| v.as_str()).unwrap_or("password");
+            let credential_id = val.get("credential_id").and_then(|v| v.as_str()).unwrap_or("");
+            let group_id = val.get("group_id").and_then(|v| v.as_str());
+            let tags = val.get("tags").and_then(|v| v.as_str());
+            let notes = val.get("notes").and_then(|v| v.as_str());
+            let created_at = val.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
+            let updated_at = val.get("updated_at").and_then(|v| v.as_str()).unwrap_or("");
+
+            if !credential_id.is_empty() {
+                let now_str = chrono::Utc::now().to_rfc3339();
+                conn.execute(
+                    "INSERT INTO credentials (id, type, encrypted_data, nonce, created_at, updated_at)
+                     VALUES (?1, 'password', X'', X'', ?2, ?2)
+                     ON CONFLICT(id) DO NOTHING",
+                    rusqlite::params![credential_id, now_str],
+                )?;
+            }
+
+            if let Some(grp_id) = group_id {
+                if !grp_id.is_empty() {
+                    conn.execute(
+                        "INSERT INTO groups (id, name, color, parent_id, sort_order)
+                         VALUES (?1, 'Synced Group', NULL, NULL, 0)
+                         ON CONFLICT(id) DO NOTHING",
+                        rusqlite::params![grp_id],
+                    )?;
+                }
+            }
+
+            conn.execute(
+                "INSERT INTO hosts (id, label, hostname, port, username, auth_type, credential_id, group_id, tags, notes, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                 ON CONFLICT(id) DO UPDATE SET label=excluded.label, hostname=excluded.hostname, port=excluded.port, username=excluded.username, auth_type=excluded.auth_type, credential_id=excluded.credential_id, group_id=excluded.group_id, tags=excluded.tags, notes=excluded.notes, updated_at=excluded.updated_at",
+                rusqlite::params![id, label, hostname, port, username, auth_type, credential_id, group_id, tags, notes, created_at, updated_at],
+            )?;
+        }
+        EntityType::Group => {
+            let val: serde_json::Value = serde_json::from_slice(_payload)?;
+            let id = val.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let name = val.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let color = val.get("color").and_then(|v| v.as_str());
+            let parent_id = val.get("parent_id").and_then(|v| v.as_str());
+            let sort_order = val.get("sort_order").and_then(|v| v.as_i64()).unwrap_or(0);
+            conn.execute(
+                "INSERT INTO groups (id, name, color, parent_id, sort_order)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(id) DO UPDATE SET name=excluded.name, color=excluded.color, parent_id=excluded.parent_id, sort_order=excluded.sort_order",
+                rusqlite::params![id, name, color, parent_id, sort_order],
+            )?;
+        }
+        EntityType::Snippet => {
+            let val: serde_json::Value = serde_json::from_slice(_payload)?;
+            let id = val.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let title = val.get("title").and_then(|v| v.as_str()).unwrap_or("");
+            let command = val.get("command").and_then(|v| v.as_str()).unwrap_or("");
+            let description = val.get("description").and_then(|v| v.as_str());
+            let tags = val.get("tags").and_then(|v| v.as_str());
+            let created_at = val.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
+            let updated_at = val.get("updated_at").and_then(|v| v.as_str()).unwrap_or("");
+            conn.execute(
+                "INSERT INTO snippets (id, title, command, description, tags, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(id) DO UPDATE SET title=excluded.title, command=excluded.command, description=excluded.description, tags=excluded.tags, updated_at=excluded.updated_at",
+                rusqlite::params![id, title, command, description, tags, created_at, updated_at],
+            )?;
+        }
+        EntityType::Setting => {
+            let val: serde_json::Value = serde_json::from_slice(_payload)?;
+            let key = val.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            let value = val.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            conn.execute(
+                "INSERT INTO settings (key, value)
+                 VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                rusqlite::params![key, value],
+            )?;
+        }
+        EntityType::Theme => {
+            let val: serde_json::Value = serde_json::from_slice(_payload)?;
+            let id = val.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let name = val.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let base = val.get("base").and_then(|v| v.as_str()).unwrap_or("dark");
+            let definition = val.get("definition").and_then(|v| v.as_str()).unwrap_or("{}");
+            let created_at = val.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
+            let updated_at = val.get("updated_at").and_then(|v| v.as_str()).unwrap_or("");
+            conn.execute(
+                "INSERT INTO themes (id, name, base, definition, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(id) DO UPDATE SET name=excluded.name, base=excluded.base, definition=excluded.definition, updated_at=excluded.updated_at",
+                rusqlite::params![id, name, base, definition, created_at, updated_at],
+            )?;
+        }
+    }
+
     Ok(())
 }

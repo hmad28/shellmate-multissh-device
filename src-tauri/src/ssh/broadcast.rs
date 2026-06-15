@@ -1,7 +1,6 @@
 use crate::errors::AppResult;
 use parking_lot::Mutex;
 use std::collections::HashSet;
-use std::sync::Arc;
 use tokio::sync::broadcast;
 
 pub struct BroadcastManager {

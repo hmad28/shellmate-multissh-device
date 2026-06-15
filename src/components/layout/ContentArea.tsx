@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Maximize2, Minimize2 } from 'lucide-react';
 import { QuickConnect } from '@/components/connect/QuickConnect';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
@@ -361,24 +361,72 @@ function SplitItem({
 function PaneView({ pane }: { pane: LeafNode }) {
   const tabs = useTabStore((s) => s.tabs);
   const sessionByTab = useSshStore((s) => s.sessionByTab);
-  const activePaneId = usePaneStore((s) => s.activePaneId);
-  const fullscreenPaneId = usePaneStore((s) => s.fullscreenPaneId);
   const setActivePane = usePaneStore((s) => s.setActivePane);
   const setActiveTabInPane = usePaneStore((s) => s.setActiveTabInPane);
   const closeTabInPane = usePaneStore((s) => s.closeTabInPane);
-  const toggleFullscreen = usePaneStore((s) => s.toggleFullscreen);
   const root = usePaneStore((s) => s.root);
   const leafCount = getAllLeaves(root).length;
-  const hoveredZoneId = useDragStore((s) => s.hoveredZoneId);
-  const hoveredZoneType = useDragStore((s) => s.hoveredZoneType);
-  const hoveredPaneSplitRegion = useDragStore((s) => s.hoveredPaneSplitRegion);
-  const isHovered = hoveredZoneType === 'pane' && hoveredZoneId === pane.id;
-  const isActive = activePaneId === pane.id;
-  const isFullscreen = fullscreenPaneId === pane.id;
+  // Subscribe to fullscreenPaneId via a separate child to avoid re-rendering
+  // the whole pane tree when only the fullscreen flag changes.
+  const fullscreenPaneId = usePaneStore((s) => s.fullscreenPaneId);
+  const toggleFullscreen = usePaneStore((s) => s.toggleFullscreen);
 
   const paneTabs = pane.tabIds
     .map((id) => tabs.find((t) => t.id === id))
     .filter((t): t is Tab => !!t);
+
+  return (
+    <PaneViewContainer
+      pane={pane}
+      paneTabs={paneTabs}
+      sessionByTab={sessionByTab}
+      leafCount={leafCount}
+      fullscreenPaneId={fullscreenPaneId}
+      isActive={usePaneStore.getState().activePaneId === pane.id}
+      onSelectPane={() => setActivePane(pane.id)}
+      onSelectTab={(tabId) => {
+        setActiveTabInPane(pane.id, tabId);
+        setActivePane(pane.id);
+      }}
+      onCloseTab={(tabId) => closeTabInPane(pane.id, tabId)}
+      onToggleFullscreen={() => toggleFullscreen(pane.id)}
+    />
+  );
+}
+
+// PaneViewContainer: the visual pane. Isolated so we can use
+// React.memo to skip re-renders when only unrelated store slices change.
+const PaneViewContainer = React.memo(function PaneViewContainer({
+  pane,
+  paneTabs,
+  sessionByTab,
+  leafCount,
+  fullscreenPaneId,
+  isActive,
+  onSelectPane,
+  onSelectTab,
+  onCloseTab,
+  onToggleFullscreen,
+}: {
+  pane: LeafNode;
+  paneTabs: Tab[];
+  sessionByTab: Record<string, string>;
+  leafCount: number;
+  fullscreenPaneId: string | null;
+  isActive: boolean;
+  onSelectPane: () => void;
+  onSelectTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => void;
+  onToggleFullscreen: () => void;
+}) {
+  // Drag-store subscriptions live HERE so the PaneView JSX subtree
+  // re-renders on drag updates, but the Terminal children (memoized)
+  // skip re-render. PaneView's parent already memoized the heavy work.
+  const hoveredZoneId = useDragStore((s) => s.hoveredZoneId);
+  const hoveredZoneType = useDragStore((s) => s.hoveredZoneType);
+  const hoveredPaneSplitRegion = useDragStore((s) => s.hoveredPaneSplitRegion);
+  const isHovered = hoveredZoneType === 'pane' && hoveredZoneId === pane.id;
+  const isFullscreen = fullscreenPaneId === pane.id;
 
   return (
     <div
@@ -389,7 +437,7 @@ function PaneView({ pane }: { pane: LeafNode }) {
         isActive && 'border-accent/30',
         isHovered && 'bg-accent/5',
       )}
-      onClick={() => setActivePane(pane.id)}
+      onClick={onSelectPane}
     >
       {/* Per-pane tab bar */}
       <div
@@ -403,11 +451,8 @@ function PaneView({ pane }: { pane: LeafNode }) {
               key={tab.id}
               tab={tab}
               isActive={tab.id === pane.activeTabId}
-              onSelect={() => {
-                setActiveTabInPane(pane.id, tab.id);
-                setActivePane(pane.id);
-              }}
-              onClose={() => closeTabInPane(pane.id, tab.id)}
+              onSelect={() => onSelectTab(tab.id)}
+              onClose={() => onCloseTab(tab.id)}
             />
           ))}
         </div>
@@ -415,7 +460,7 @@ function PaneView({ pane }: { pane: LeafNode }) {
           {leafCount > 1 && (
             <button
               type="button"
-              onClick={() => toggleFullscreen(pane.id)}
+              onClick={onToggleFullscreen}
               className="flex h-6 w-6 items-center justify-center rounded text-fg-muted hover:bg-bg-elevated hover:text-fg"
               title={isFullscreen ? 'Restore' : 'Maximize'}
             >
@@ -448,11 +493,13 @@ function PaneView({ pane }: { pane: LeafNode }) {
         })}
 
         {/* Drop zone overlay */}
-        {isHovered && hoveredPaneSplitRegion && <DropZoneOverlay region={hoveredPaneSplitRegion} />}
+        {isHovered && hoveredPaneSplitRegion && (
+          <DropZoneOverlay region={hoveredPaneSplitRegion} />
+        )}
       </div>
     </div>
   );
-}
+});
 
 // --- PaneTab: individual tab in per-pane tab bar ---
 

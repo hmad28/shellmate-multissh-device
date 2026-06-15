@@ -32,7 +32,7 @@ pub async fn connection_diagnose(
     use std::net::ToSocketAddrs;
     use std::time::Instant;
 
-    let (hostname, port, username, auth_type, credential_id) = {
+    let (hostname, port, _username, auth_type, _credential_id) = {
         let conn = state.db.lock();
         conn.query_row(
             "SELECT hostname, port, username, auth_type, credential_id FROM hosts WHERE id = ?1",

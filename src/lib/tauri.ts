@@ -165,14 +165,17 @@ export const tauri = {
   },
   vipAccess: {
     generateKeypair: () => invoke<string>('vip_generate_keypair'),
-    injectAuthorizedKeys: (pubkeyHex: string) =>
-      invoke<string>('vip_inject_authorized_keys', { pubkeyHex }),
-    createLocalhostHost: (credentialId: string, label?: string) =>
-      invoke<string>('vip_create_localhost_host', { credentialId, label }),
+    injectAuthorizedKeys: (pubkeyHex: string, asAdmin?: boolean) =>
+      invoke<string>('vip_inject_authorized_keys', { pubkeyHex, asAdmin }),
+    createLocalhostHost: (credentialId: string, label?: string, username?: string, asAdmin?: boolean) =>
+      invoke<string>('vip_create_localhost_host', { credentialId, label, username, asAdmin }),
     getKeyStatus: () =>
-      invoke<{ hostExists: boolean; authorizedKeysInjected: boolean }>(
-        'vip_get_key_status',
-      ),
+      invoke<{
+        hostExists: boolean;
+        adminHostExists: boolean;
+        authorizedKeysInjected: boolean;
+        adminKeysInjected: boolean;
+      }>('vip_get_key_status'),
   },
   p2p: {
     startSyncServer: () => invoke<string>('p2p_start_sync_server'),

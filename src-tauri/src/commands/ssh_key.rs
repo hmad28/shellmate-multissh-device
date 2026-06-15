@@ -21,7 +21,7 @@ pub async fn ssh_key_generate(
     state: State<'_, AppState>,
     name: String,
     key_type: String,
-    bits: u32,
+    _bits: u32,
     passphrase: Option<String>,
 ) -> AppResult<SshKey> {
     use ed25519_dalek::SigningKey;
@@ -44,7 +44,7 @@ pub async fn ssh_key_generate(
 
             // Format private key as PEM
             let priv_b64 = base64_engine::encode(&priv_bytes);
-            let priv_pem = if let Some(ref pp) = passphrase {
+            let priv_pem = if let Some(ref _pp) = passphrase {
                 // Encrypt with passphrase (simplified — in production use proper OpenSSH format)
                 format!("-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----", priv_b64)
             } else {

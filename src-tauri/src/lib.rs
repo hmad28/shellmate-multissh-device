@@ -18,6 +18,7 @@ mod team;
 mod audit;
 use crate::commands::p2p_sync::SyncServerState;
 use crate::commands::vip_access::VipKeyStore;
+use crate::db::DbState;
 use crate::state::AppState;
 use std::sync::Arc;
 use tauri::Manager;
@@ -40,10 +41,37 @@ pub fn run() {
 
             log::info!("Opening database at {}", db_path.display());
 
-            // Check if vault metadata exists — if so, DB is encrypted.
-            // Don't try to open it without a key. The unlock flow will handle it.
+            // Check if vault metadata exists — if so, DB should be encrypted.
+            // Self-heal: the on-disk DB may be in a broken state from older
+            // builds that wrote .vault before completing migration, leaving
+            // a plaintext DB alongside a stale .vault. Strip .vault in that
+            // case so the user lands on the setup screen instead of an
+            // unrecoverable unlock error. A .bak is preserved if present.
+            if db::has_vault_meta(&db_path) {
+                match db::probe_db_state(&db_path) {
+                    DbState::Plaintext => {
+                        log::warn!(
+                            "Vault metadata present but shellmate.db is plaintext \
+                             (broken pre-fix state). Clearing vault metadata so \
+                             user can re-setup."
+                        );
+                        db::remove_vault_meta(&db_path);
+                    }
+                    DbState::Unreadable => {
+                        log::warn!(
+                            "Vault metadata present but shellmate.db header is \
+                             unreadable/garbage. Clearing vault metadata so user \
+                             can re-setup."
+                        );
+                        db::remove_vault_meta(&db_path);
+                    }
+                    DbState::SqliteHeader | DbState::Empty => {
+                        log::info!("Vault metadata found — DB is encrypted. Deferring open until unlock.");
+                    }
+                }
+            }
+
             let conn = if db::has_vault_meta(&db_path) {
-                log::info!("Vault metadata found — DB is encrypted. Deferring open until unlock.");
                 // Create a temporary in-memory DB so AppState can be initialized.
                 // The real DB will be swapped in after vault unlock.
                 db::open(&std::path::Path::new(":memory:"), None)

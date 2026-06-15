@@ -19,6 +19,9 @@ import { useHostStore } from '@/stores/host-store';
 import { useUiStore } from '@/stores/ui-store';
 import { useVaultStore } from '@/stores/vault-store';
 
+import { useSshStore } from '@/stores/ssh-store';
+import { useTabStore } from '@/stores/tab-store';
+
 export function Sidebar() {
   const { sidebarCollapsed, activePanel, setActivePanel, toggleSidebar } =
     useUiStore();
@@ -26,6 +29,29 @@ export function Sidebar() {
   const loadAll = useHostStore((s) => s.loadAll);
   const searchQuery = useHostStore((s) => s.searchQuery);
   const setSearchQuery = useHostStore((s) => s.setSearchQuery);
+
+  const handleOpenLocalTerminal = async () => {
+    const hosts = useHostStore.getState().hosts;
+    const localHost = hosts.find(
+      (h) =>
+        h.hostname === 'localhost' &&
+        (h.label.includes('VIP') || h.tags.includes('vip')),
+    );
+
+    if (localHost) {
+      const tabId = useTabStore.getState().addTab({
+        label: localHost.label,
+        hostId: localHost.id,
+      });
+      try {
+        await useSshStore.getState().connectSaved(tabId, localHost.id);
+      } catch (err) {
+        console.error('Failed to connect to local terminal', err);
+      }
+    } else {
+      setActivePanel('vip-access');
+    }
+  };
 
   useEffect(() => {
     if (vaultUnlocked) void loadAll();
@@ -43,8 +69,16 @@ export function Sidebar() {
         aria-label="Hosts sidebar"
       >
         <div className="flex h-full w-60 flex-col">
-          <div className="border-b border-border-subtle p-3">
+          <div className="border-b border-border-subtle p-3 flex flex-col gap-2">
             <SearchInput value={searchQuery} onChange={setSearchQuery} />
+            <button
+              type="button"
+              onClick={handleOpenLocalTerminal}
+              className="flex w-full items-center justify-center gap-1.5 rounded-md bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white py-1.5 text-xs font-semibold shadow-sm transition-all duration-200 active:scale-95"
+            >
+              <Activity size={12} />
+              <span>Open Local Terminal</span>
+            </button>
           </div>
 
           <DiscoveredHostList />

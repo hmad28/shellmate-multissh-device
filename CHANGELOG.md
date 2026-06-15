@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Local Terminal & Premium Server Monitor (2026-06-15)
+
+**VIP Administrator Access & Local Terminal** (`src-tauri/` & `src/`):
+- Added `as_admin` parameter to `vip_inject_authorized_keys` and `vip_create_localhost_host` to configure elevated terminal access.
+- Implemented Windows UAC elevation via temporary PowerShell script with strict ACLs (`SYSTEM` & `Administrators` only).
+- Implemented Unix root elevation using native AppleScript (`osascript`) and Linux `pkexec` agents.
+- Resolved Tauri `state not managed for field db` bug by passing `State<'_, AppState>` instead of raw database connection references.
+- Added a prominent **"Open Local Terminal"** button in `Sidebar.tsx` to instantly launch localhost terminal session (with fallback to the VIP Access setup screen).
+- Added an interactive **"Next Steps & How to Use"** guide card inside `VipAccessPanel.tsx` upon successful VIP setup.
+
+**Real-time Server Monitor** (`src/`):
+- Replaced the static, refresh-only stats screen with an auto-updating dashboard polling every 2 seconds.
+- Implemented a High-DPI canvas-based `CanvasGraph` component with custom grid overlays, glow paths, and smooth gradients.
+- Created live monitoring charts for **CPU Load**, **Memory Usage**, **Network Download (Rx)**, and **Network Upload (Tx)** speeds.
+- Implemented network speed calculation based on cumulative transfer rate deltas.
+- Polished layouts for Disks and Top Processes tables.
+- Fixed TypeScript compiler types (`KeyItem`) for custom keyboard layouts in `MobileKeyBar.tsx`.
+
 ### Added — Phase 14: Polish & Distribution (2026-06-13)
 
 **Toast Notifications** (`src/`):

@@ -28,8 +28,18 @@ export default defineConfig({
         }
       : undefined,
     watch: {
-      // Tell Vite to ignore watching `src-tauri`
-      ignored: ['**/src-tauri/**'],
+      // Tell Vite to ignore watching src-tauri, .git, and agent/temp directories
+      ignored: [
+        '**/src-tauri/**',
+        '**/.git/**',
+        '**/.remember/**',
+        '**/.kiro/**',
+        '**/.mimocode/**',
+        '**/.opencode/**',
+        '**/.commandcode/**',
+        '**/_bmad/**',
+        '**/_bmad-output/**',
+      ],
     },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
