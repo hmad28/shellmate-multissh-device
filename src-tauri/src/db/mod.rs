@@ -12,11 +12,11 @@ const SQLCIPHER_KEY_LEN: usize = 32;
 /// alongside the encrypted DB. Allows password verification before opening
 /// the encrypted database.
 const VAULT_META_MAGIC: &[u8] = b"SHELMATE_VAULT1";
-const VAULT_META_SALT_OFFSET: usize = 16; // after magic
+const VAULT_META_SALT_OFFSET: usize = 15; // after magic (15 bytes)
 const VAULT_META_SALT_LEN: usize = 16;
-const VAULT_META_NONCE_OFFSET: usize = VAULT_META_SALT_OFFSET + VAULT_META_SALT_LEN;
+const VAULT_META_NONCE_OFFSET: usize = VAULT_META_SALT_OFFSET + VAULT_META_SALT_LEN; // 31
 const VAULT_META_NONCE_LEN: usize = 12;
-const VAULT_META_CT_OFFSET: usize = VAULT_META_NONCE_OFFSET + VAULT_META_NONCE_LEN;
+const VAULT_META_CT_OFFSET: usize = VAULT_META_NONCE_OFFSET + VAULT_META_NONCE_LEN; // 43
 
 /// Get the vault metadata file path for a given DB path.
 fn vault_meta_path(db_path: &Path) -> PathBuf {
@@ -55,7 +55,7 @@ pub fn read_vault_meta(db_path: &Path) -> AppResult<([u8; 16], [u8; 12], Vec<u8>
     if data.len() < VAULT_META_CT_OFFSET {
         return Err(AppError::Internal("vault meta file too short".into()));
     }
-    if &data[..16] != VAULT_META_MAGIC {
+    if &data[..VAULT_META_MAGIC.len()] != VAULT_META_MAGIC {
         return Err(AppError::Internal("vault meta invalid magic".into()));
     }
 
