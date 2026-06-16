@@ -2,9 +2,10 @@ use crate::errors::AppResult;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
-use tauri::State;
+use tauri::{Emitter, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +18,7 @@ pub struct LocalSession {
 /// Spawn a local shell process.
 #[tauri::command]
 pub async fn local_shell_spawn(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     shell: Option<String>,
 ) -> AppResult<LocalSession> {
@@ -61,14 +63,101 @@ pub async fn local_shell_spawn(
         cmd_builder.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    let child = cmd_builder
+    let mut child = cmd_builder
         .spawn()
         .map_err(|e| crate::errors::AppError::Internal(format!("spawn {cmd}: {e}")))?;
 
     let pid = child.id().unwrap_or(0);
 
+    let mut stdout = child.stdout.take().ok_or_else(|| crate::errors::AppError::Internal("failed to open stdout".into()))?;
+    let mut stderr = child.stderr.take().ok_or_else(|| crate::errors::AppError::Internal("failed to open stderr".into()))?;
+
+    // Spawn reader task for stdout
+    let app_stdout = app.clone();
+    let session_id_stdout = session_id.clone();
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 1024];
+        loop {
+            match stdout.read(&mut buf).await {
+                Ok(0) => break, // EOF
+                Ok(n) => {
+                    let text = String::from_utf8_lossy(&buf[..n]).into_owned();
+                    let _ = app_stdout.emit(&format!("ssh:output:{}", session_id_stdout), serde_json::json!({
+                        "sessionId": session_id_stdout,
+                        "data": text,
+                    }));
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    // Spawn reader task for stderr
+    let app_stderr = app.clone();
+    let session_id_stderr = session_id.clone();
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 1024];
+        loop {
+            match stderr.read(&mut buf).await {
+                Ok(0) => break, // EOF
+                Ok(n) => {
+                    let text = String::from_utf8_lossy(&buf[..n]).into_owned();
+                    let _ = app_stderr.emit(&format!("ssh:output:{}", session_id_stderr), serde_json::json!({
+                        "sessionId": session_id_stderr,
+                        "data": text,
+                    }));
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
     // Store the child process handle.
     state.local_sessions.insert(session_id.clone(), tokio::sync::Mutex::new(child));
+
+    // Spawn status monitoring task
+    let app_status = app.clone();
+    let session_id_status = session_id.clone();
+    let local_sessions_status = Arc::clone(&state.local_sessions);
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            
+            let mut exited = false;
+            if let Some(entry) = local_sessions_status.get(&session_id_status) {
+                if let Ok(mut child) = entry.value().try_lock() {
+                    match child.try_wait() {
+                        Ok(Some(_status)) => {
+                            exited = true;
+                        }
+                        Err(_) => {
+                            exited = true;
+                        }
+                        _ => {}
+                    }
+                }
+            } else {
+                exited = true;
+            }
+
+            if exited {
+                let _ = app_status.emit(&format!("ssh:status:{}", session_id_status), serde_json::json!({
+                    "sessionId": session_id_status,
+                    "status": "disconnected",
+                    "message": null,
+                }));
+                local_sessions_status.remove(&session_id_status);
+                break;
+            }
+        }
+    });
+
+    // Emit connected status immediately
+    let _ = app.emit(&format!("ssh:status:{}", session_id), serde_json::json!({
+        "sessionId": session_id,
+        "status": "connected",
+        "message": null,
+    }));
 
     Ok(LocalSession {
         id: session_id,

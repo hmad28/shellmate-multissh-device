@@ -18,6 +18,7 @@ interface SshStore {
   getSession: (tabId: string) => string | undefined;
   connectSaved: (tabId: string, hostId: string) => Promise<void>;
   connectQuick: (tabId: string, params: any) => Promise<void>;
+  connectLocal: (tabId: string, shell?: string) => Promise<void>;
   registerAttempt: (sessionId: string, attempt: ConnectionAttempt) => void;
   removeAttempt: (sessionId: string) => void;
   retryAttempt: (sessionId: string) => Promise<void>;
@@ -96,6 +97,22 @@ export const useSshStore = create<SshStore>((set, get) => ({
       get().unbind(tabId);
       get().removeAttempt(sessionId);
       useToastStore.getState().addToast('error', `Connection failed: ${err}`);
+      throw err;
+    }
+  },
+
+  connectLocal: async (tabId, shell) => {
+    const { updateTabStatus } = useTabStore.getState();
+    updateTabStatus(tabId, 'connecting');
+    try {
+      const session = await tauri.localShell.spawn(shell);
+      get().bind(tabId, session.id);
+      updateTabStatus(tabId, 'connected');
+    } catch (err) {
+      console.error('Local shell spawn failed', err);
+      updateTabStatus(tabId, 'disconnected');
+      get().unbind(tabId);
+      useToastStore.getState().addToast('error', `Local terminal failed to spawn: ${err}`);
       throw err;
     }
   },

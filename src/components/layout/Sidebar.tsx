@@ -31,25 +31,14 @@ export function Sidebar() {
   const setSearchQuery = useHostStore((s) => s.setSearchQuery);
 
   const handleOpenLocalTerminal = async () => {
-    const hosts = useHostStore.getState().hosts;
-    const localHost = hosts.find(
-      (h) =>
-        h.hostname === 'localhost' &&
-        (h.label.includes('VIP') || h.tags.includes('vip')),
-    );
-
-    if (localHost) {
-      const tabId = useTabStore.getState().addTab({
-        label: localHost.label,
-        hostId: localHost.id,
-      });
-      try {
-        await useSshStore.getState().connectSaved(tabId, localHost.id);
-      } catch (err) {
-        console.error('Failed to connect to local terminal', err);
-      }
-    } else {
-      setActivePanel('vip-access');
+    const tabId = useTabStore.getState().addTab({
+      label: 'Local Terminal',
+      hostId: 'local',
+    });
+    try {
+      await useSshStore.getState().connectLocal(tabId);
+    } catch (err) {
+      console.error('Failed to connect to local terminal', err);
     }
   };
 

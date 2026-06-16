@@ -152,7 +152,11 @@ pub async fn ssh_send(
     session_id: String,
     data: String,
 ) -> AppResult<()> {
-    state.ssh.send_input(&session_id, data.into_bytes())
+    if state.local_sessions.contains_key(&session_id) {
+        crate::commands::local_shell::local_shell_send(state, session_id, data).await
+    } else {
+        state.ssh.send_input(&session_id, data.into_bytes())
+    }
 }
 
 #[tauri::command]
@@ -162,7 +166,11 @@ pub async fn ssh_resize(
     cols: u32,
     rows: u32,
 ) -> AppResult<()> {
-    state.ssh.resize(&session_id, cols, rows)
+    if state.local_sessions.contains_key(&session_id) {
+        Ok(())
+    } else {
+        state.ssh.resize(&session_id, cols, rows)
+    }
 }
 
 #[tauri::command]
@@ -170,5 +178,9 @@ pub async fn ssh_disconnect(
     state: State<'_, AppState>,
     session_id: String,
 ) -> AppResult<()> {
-    state.ssh.close(&session_id)
+    if state.local_sessions.contains_key(&session_id) {
+        crate::commands::local_shell::local_shell_kill(state, session_id).await
+    } else {
+        state.ssh.close(&session_id)
+    }
 }
