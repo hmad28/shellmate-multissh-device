@@ -31,7 +31,9 @@ pub async fn save_credential(
     plaintext: String,
 ) -> AppResult<String> {
     if plaintext.is_empty() {
-        return Err(AppError::InvalidInput("credential plaintext is empty".into()));
+        return Err(AppError::InvalidInput(
+            "credential plaintext is empty".into(),
+        ));
     }
 
     let blob = state.vault.encrypt(plaintext.as_bytes())?;
@@ -66,9 +68,7 @@ pub fn load_credential_plaintext(state: &AppState, id: &str) -> AppResult<Vec<u8
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => {
-                AppError::NotFound(format!("credential {id}"))
-            }
+            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("credential {id}")),
             other => AppError::Database(other),
         })?
     };
@@ -87,10 +87,7 @@ pub fn load_credential_plaintext(state: &AppState, id: &str) -> AppResult<Vec<u8
 }
 
 #[tauri::command]
-pub async fn delete_credential(
-    state: State<'_, AppState>,
-    id: String,
-) -> AppResult<()> {
+pub async fn delete_credential(state: State<'_, AppState>, id: String) -> AppResult<()> {
     let conn = state.db.lock();
     let deleted = conn.execute("DELETE FROM credentials WHERE id = ?1", [&id])?;
     if deleted == 0 {

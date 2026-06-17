@@ -39,8 +39,13 @@ pub struct ConnectParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AuthMaterial {
-    Password { password: String },
-    PrivateKey { private_key: String, passphrase: Option<String> },
+    Password {
+        password: String,
+    },
+    PrivateKey {
+        private_key: String,
+        passphrase: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -247,12 +252,10 @@ async fn run_session(
     .map_err(|e| AppError::Internal(format!("ssh connect failed: {e}")))?;
 
     let auth_ok = match &params.auth {
-        AuthMaterial::Password { password } => {
-            handle
-                .authenticate_password(&params.username, password.clone())
-                .await
-                .map_err(|e| AppError::Internal(format!("ssh auth error: {e}")))?
-        }
+        AuthMaterial::Password { password } => handle
+            .authenticate_password(&params.username, password.clone())
+            .await
+            .map_err(|e| AppError::Internal(format!("ssh auth error: {e}")))?,
         AuthMaterial::PrivateKey {
             private_key,
             passphrase,
@@ -303,7 +306,9 @@ async fn run_session(
         use tauri::Manager;
         let state = app.state::<AppState>();
         state.sftp.register_ssh_session(&session_id, params.clone());
-        state.port_forward.register_ssh_handle(&session_id, Arc::clone(&handle));
+        state
+            .port_forward
+            .register_ssh_handle(&session_id, Arc::clone(&handle));
     }
 
     emit_status(&app, &session_id, SessionStatus::Connected, None);

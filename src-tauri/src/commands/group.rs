@@ -67,10 +67,7 @@ pub async fn get_groups(state: State<'_, AppState>) -> AppResult<Vec<Group>> {
 }
 
 #[tauri::command]
-pub async fn create_group(
-    state: State<'_, AppState>,
-    input: GroupInput,
-) -> AppResult<Group> {
+pub async fn create_group(state: State<'_, AppState>, input: GroupInput) -> AppResult<Group> {
     validate(&input)?;
     let id = Uuid::new_v4().to_string();
     let sort_order = input.sort_order.unwrap_or(0);
@@ -102,20 +99,16 @@ pub async fn update_group(
 
     // Prevent self-parent or cycle (simple check: parent != self).
     if input.parent_id.as_deref() == Some(id.as_str()) {
-        return Err(AppError::InvalidInput("group cannot be its own parent".into()));
+        return Err(AppError::InvalidInput(
+            "group cannot be its own parent".into(),
+        ));
     }
 
     let conn = state.db.lock();
     let updated = conn.execute(
         "UPDATE groups SET name = ?1, color = ?2, parent_id = ?3, sort_order = ?4
          WHERE id = ?5",
-        rusqlite::params![
-            input.name,
-            input.color,
-            input.parent_id,
-            sort_order,
-            id,
-        ],
+        rusqlite::params![input.name, input.color, input.parent_id, sort_order, id,],
     )?;
 
     if updated == 0 {
@@ -134,10 +127,7 @@ pub async fn update_group(
 /// Delete a group. Hosts in the group become ungrouped (group_id = NULL).
 /// Sub-groups become detached (parent_id = NULL).
 #[tauri::command]
-pub async fn delete_group(
-    state: State<'_, AppState>,
-    id: String,
-) -> AppResult<()> {
+pub async fn delete_group(state: State<'_, AppState>, id: String) -> AppResult<()> {
     let conn = state.db.lock();
 
     // Detach hosts and sub-groups before deleting
@@ -167,11 +157,7 @@ pub async fn move_host_to_group(
     let conn = state.db.lock();
     let updated = conn.execute(
         "UPDATE hosts SET group_id = ?1, updated_at = ?2 WHERE id = ?3",
-        rusqlite::params![
-            group_id,
-            chrono::Utc::now().to_rfc3339(),
-            host_id,
-        ],
+        rusqlite::params![group_id, chrono::Utc::now().to_rfc3339(), host_id,],
     )?;
     if updated == 0 {
         return Err(AppError::NotFound(format!("host {host_id}")));

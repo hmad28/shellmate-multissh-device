@@ -25,6 +25,7 @@
 | Brute force | High | Argon2id key derivation |
 | Unauthorized access | High | Vault lock, auto-lock |
 | Data exfiltration | High | No telemetry, local-only |
+| Incomplete convenience auth | Critical | Biometric unlock is fail-closed until OS-protected key wrapping is implemented |
 
 ---
 
@@ -565,13 +566,13 @@ Domain separation via HKDF `info` parameter prevents either key from being reuse
 
 ---
 
-## 12. Biometric Unlock Security (Phase 8)
+## 12. Biometric Unlock Security (Deferred)
 
 ### 12.1 Threat Model
 
 Biometric unlock provides **convenience**, not extra security beyond the master password. The master password is still the root of trust.
 
-### 12.2 Architecture
+### 12.2 Required Architecture Before Re-Enabling
 
 ```
 First-time enable
@@ -596,7 +597,11 @@ Subsequent unlock
    Master Key  ──> derive vault & DB keys
 ```
 
-### 12.3 Per-OS Implementation
+### 12.3 Current Implementation Status
+
+Biometric unlock commands are disabled. Windows Hello availability probing exists, but ShellMate does not currently enroll or unwrap vault keys through biometric auth. This is intentional: the app must not store a wrapping secret in app-readable database state or sidecar files.
+
+### 12.4 Per-OS Target Implementation
 
 | Platform | Backing Store | API |
 |----------|---------------|-----|
@@ -606,7 +611,7 @@ Subsequent unlock
 | Android | Android Keystore | `BiometricPrompt` |
 | Linux | Not supported (fallback to master password) | — |
 
-### 12.4 Security Rules
+### 12.5 Security Rules
 
 - Biometric unlock is **per-device only** (not synced)
 - Failed biometric attempts do NOT increment master password lockout counter
@@ -657,6 +662,8 @@ Conflicts resolved client-side after decryption. Cloud provider only sees opaque
 
 ## 14. Team Vault Security (Phase 11)
 
+Current status: team CRUD exists, but member sharing and host sharing are disabled until public-key wrapping and revocation key rotation are implemented. The app must not claim secure team sharing without these properties.
+
 ### 14.1 Key Hierarchy
 
 ```
@@ -691,10 +698,11 @@ Two team members editing same host: last-write-wins by default with timestamp; m
 
 ### 15.1 Sandbox
 
-Plugins run in **Wasmtime** WASM sandbox:
+Plugins run in **Wasmtime** WASM sandbox for no-import modules:
 - No native code execution
 - No direct OS syscalls
 - No filesystem or network access by default
+- WASI/imported host functions are rejected until the host API is implemented
 
 ### 15.2 Capability-Based Permissions
 

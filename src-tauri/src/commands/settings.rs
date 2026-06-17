@@ -24,11 +24,7 @@ pub async fn get_settings(state: State<'_, AppState>) -> AppResult<Vec<Setting>>
 }
 
 #[tauri::command]
-pub async fn set_setting(
-    state: State<'_, AppState>,
-    key: String,
-    value: String,
-) -> AppResult<()> {
+pub async fn set_setting(state: State<'_, AppState>, key: String, value: String) -> AppResult<()> {
     let conn = state.db.lock();
     conn.execute(
         "INSERT INTO settings (key, value) VALUES (?1, ?2)

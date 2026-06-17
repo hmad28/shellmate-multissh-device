@@ -42,28 +42,19 @@ pub async fn plugin_install(
 }
 
 #[tauri::command]
-pub async fn plugin_uninstall(
-    state: State<'_, AppState>,
-    plugin_id: String,
-) -> AppResult<()> {
+pub async fn plugin_uninstall(state: State<'_, AppState>, plugin_id: String) -> AppResult<()> {
     let conn = state.db.lock();
     PluginManager::uninstall(&conn, &plugin_id)
 }
 
 #[tauri::command]
-pub async fn plugin_enable(
-    state: State<'_, AppState>,
-    plugin_id: String,
-) -> AppResult<()> {
+pub async fn plugin_enable(state: State<'_, AppState>, plugin_id: String) -> AppResult<()> {
     let conn = state.db.lock();
     PluginManager::set_enabled(&conn, &plugin_id, true)
 }
 
 #[tauri::command]
-pub async fn plugin_disable(
-    state: State<'_, AppState>,
-    plugin_id: String,
-) -> AppResult<()> {
+pub async fn plugin_disable(state: State<'_, AppState>, plugin_id: String) -> AppResult<()> {
     let conn = state.db.lock();
     PluginManager::set_enabled(&conn, &plugin_id, false)
 }
@@ -98,20 +89,28 @@ pub async fn plugin_revoke_capability(
 }
 
 #[tauri::command]
-pub async fn plugin_execute(
-    state: State<'_, AppState>,
-    plugin_id: String,
-) -> AppResult<String> {
-    let enabled = {
+pub async fn plugin_execute(state: State<'_, AppState>, plugin_id: String) -> AppResult<String> {
+    let capabilities = {
         let conn = state.db.lock();
         let plugin = PluginManager::get(&conn, &plugin_id)?;
-        plugin.enabled
+        if !plugin.enabled {
+            return Err(crate::errors::AppError::InvalidInput(
+                "plugin is disabled".into(),
+            ));
+        }
+        PluginManager::list_capabilities(&conn, &plugin_id)?
     };
 
-    if !enabled {
-        return Err(crate::errors::AppError::InvalidInput(
-            "plugin is disabled".into(),
-        ));
+    let missing: Vec<String> = capabilities
+        .into_iter()
+        .filter(|cap| !cap.granted)
+        .map(|cap| cap.capability)
+        .collect();
+    if !missing.is_empty() {
+        return Err(crate::errors::AppError::InvalidInput(format!(
+            "plugin has ungranted capabilities: {}",
+            missing.join(", ")
+        )));
     }
 
     let wasm_path = {

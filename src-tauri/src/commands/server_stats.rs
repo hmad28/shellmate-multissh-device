@@ -1,4 +1,5 @@
 use crate::errors::AppResult;
+use crate::known_hosts::KnownHostsManager;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -119,6 +120,7 @@ pub async fn server_stats_exec(
     // Create a temporary SSH connection for command execution.
     let cred_str = String::from_utf8_lossy(&credential).to_string();
     let output = exec_command_over_ssh(
+        Arc::clone(&state.known_hosts),
         &hostname,
         port as u16,
         &username,
@@ -135,6 +137,7 @@ pub async fn server_stats_exec(
 
 /// Execute a command over SSH and return stdout.
 async fn exec_command_over_ssh(
+    known_hosts: Arc<KnownHostsManager>,
     hostname: &str,
     port: u16,
     username: &str,
@@ -145,8 +148,13 @@ async fn exec_command_over_ssh(
     use async_trait::async_trait;
     use russh::client;
     use russh::keys::key::PublicKey;
+    use russh_keys::PublicKeyBase64;
 
-    struct ExecHandler;
+    struct ExecHandler {
+        known_hosts: Arc<KnownHostsManager>,
+        hostname: String,
+        port: u16,
+    }
 
     #[async_trait]
     impl client::Handler for ExecHandler {
@@ -154,9 +162,46 @@ async fn exec_command_over_ssh(
 
         async fn check_server_key(
             &mut self,
-            _server_public_key: &PublicKey,
+            server_public_key: &PublicKey,
         ) -> Result<bool, Self::Error> {
-            Ok(true)
+            let key_type = match server_public_key {
+                PublicKey::Ed25519(_) => "ssh-ed25519",
+                PublicKey::RSA { .. } => "ssh-rsa",
+                PublicKey::EC { .. } => "ecdsa-sha2-nistp256",
+                _ => "unknown",
+            };
+            let public_key_blob = server_public_key.public_key_bytes();
+            match self.known_hosts.verify_host_key(
+                &self.hostname,
+                self.port,
+                key_type,
+                &public_key_blob,
+            ) {
+                Ok(result) if result.verified => Ok(true),
+                Ok(result) if result.is_new => {
+                    log::warn!(
+                        "Refusing remote exec for untrusted host {}:{} ({})",
+                        self.hostname,
+                        self.port,
+                        result.presented_fingerprint
+                    );
+                    Ok(false)
+                }
+                Ok(result) => {
+                    log::error!(
+                        "Refusing remote exec because host key verification failed for {}:{} (stored: {:?}, presented: {})",
+                        self.hostname,
+                        self.port,
+                        result.stored_fingerprint,
+                        result.presented_fingerprint
+                    );
+                    Ok(false)
+                }
+                Err(e) => {
+                    log::error!("Host key verification error during remote exec: {e}");
+                    Ok(false)
+                }
+            }
         }
     }
 
@@ -166,7 +211,11 @@ async fn exec_command_over_ssh(
     };
 
     let config = Arc::new(config);
-    let handler = ExecHandler;
+    let handler = ExecHandler {
+        known_hosts,
+        hostname: hostname.to_string(),
+        port,
+    };
 
     let mut session = client::connect(config, (hostname, port), handler)
         .await
@@ -174,12 +223,10 @@ async fn exec_command_over_ssh(
 
     // Authenticate.
     let authenticated = match auth_type {
-        "password" => {
-            session
-                .authenticate_password(username, credential)
-                .await
-                .map_err(|e| crate::errors::AppError::Internal(format!("auth: {e}")))?
-        }
+        "password" => session
+            .authenticate_password(username, credential)
+            .await
+            .map_err(|e| crate::errors::AppError::Internal(format!("auth: {e}")))?,
         "key" | "key_passphrase" => {
             let key_pair = russh_keys::decode_secret_key(credential, None)
                 .or_else(|_| russh_keys::decode_secret_key(credential, Some(credential)))
@@ -270,7 +317,10 @@ fn parse_stats_output(hostname: &str, output: &str) -> AppResult<ServerStats> {
         .collect();
     let mem_total = mem_parts.first().copied().unwrap_or(0);
     let mem_used = mem_parts.get(1).copied().unwrap_or(0);
-    let mem_available = mem_parts.get(3).copied().unwrap_or(mem_parts.get(2).copied().unwrap_or(0));
+    let mem_available = mem_parts
+        .get(3)
+        .copied()
+        .unwrap_or(mem_parts.get(2).copied().unwrap_or(0));
     let mem_usage = if mem_total > 0 {
         (mem_used as f64 / mem_total as f64) * 100.0
     } else {
@@ -382,5 +432,14 @@ pub async fn remote_exec(
     };
 
     let cred_str = String::from_utf8_lossy(&credential).to_string();
-    exec_command_over_ssh(&hostname, port as u16, &username, &auth_type, &cred_str, &command).await
+    exec_command_over_ssh(
+        Arc::clone(&state.known_hosts),
+        &hostname,
+        port as u16,
+        &username,
+        &auth_type,
+        &cred_str,
+        &command,
+    )
+    .await
 }

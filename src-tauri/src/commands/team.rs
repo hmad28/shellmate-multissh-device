@@ -1,13 +1,12 @@
 use crate::errors::AppResult;
 use crate::state::AppState;
-use crate::team::{CreateTeamInput, AddMemberInput, ShareHostInput, Team, TeamMember, TeamShare, TeamManager};
+use crate::team::{
+    AddMemberInput, CreateTeamInput, ShareHostInput, Team, TeamManager, TeamMember, TeamShare,
+};
 use tauri::State;
 
 #[tauri::command]
-pub async fn team_create(
-    state: State<'_, AppState>,
-    input: CreateTeamInput,
-) -> AppResult<Team> {
+pub async fn team_create(state: State<'_, AppState>, input: CreateTeamInput) -> AppResult<Team> {
     let conn = state.db.lock();
     TeamManager::create_team(&conn, &state.vault, &input)
 }
@@ -43,10 +42,7 @@ pub async fn team_list_members(
 }
 
 #[tauri::command]
-pub async fn team_revoke_member(
-    state: State<'_, AppState>,
-    member_id: String,
-) -> AppResult<()> {
+pub async fn team_revoke_member(state: State<'_, AppState>, member_id: String) -> AppResult<()> {
     let conn = state.db.lock();
     TeamManager::revoke_member(&conn, &member_id)
 }
@@ -70,10 +66,7 @@ pub async fn team_list_shares(
 }
 
 #[tauri::command]
-pub async fn team_remove_share(
-    state: State<'_, AppState>,
-    share_id: String,
-) -> AppResult<()> {
+pub async fn team_remove_share(state: State<'_, AppState>, share_id: String) -> AppResult<()> {
     let conn = state.db.lock();
     TeamManager::remove_share(&conn, &share_id)
 }

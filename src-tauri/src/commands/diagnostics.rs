@@ -32,9 +32,10 @@ pub async fn connection_diagnose(
     use std::net::ToSocketAddrs;
     use std::time::Instant;
 
-    let (hostname, port, _username, auth_type, _credential_id) = {
-        let conn = state.db.lock();
-        conn.query_row(
+    let (hostname, port, _username, auth_type, _credential_id) =
+        {
+            let conn = state.db.lock();
+            conn.query_row(
             "SELECT hostname, port, username, auth_type, credential_id FROM hosts WHERE id = ?1",
             [&host_id],
             |row| Ok((
@@ -45,7 +46,7 @@ pub async fn connection_diagnose(
                 row.get::<_, String>(4)?,
             )),
         ).map_err(|_| crate::errors::AppError::NotFound("host not found".into()))?
-    };
+        };
 
     let mut diag = ConnectionDiagnostics {
         hostname: hostname.clone(),
@@ -65,7 +66,10 @@ pub async fn connection_diagnose(
 
     // Stage 1: DNS resolution.
     let addr = format!("{}:{}", hostname, port);
-    let resolved = addr.to_socket_addrs().ok().and_then(|mut addrs| addrs.next());
+    let resolved = addr
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut addrs| addrs.next());
     match resolved {
         Some(sock_addr) => {
             diag.dns_resolved = true;

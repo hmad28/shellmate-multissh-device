@@ -1,6 +1,6 @@
+use super::SyncBackend;
 use crate::errors::AppResult;
 use async_trait::async_trait;
-use super::SyncBackend;
 
 /// WebDAV sync backend.
 /// Supports Nextcloud, ownCloud, and generic WebDAV servers.
@@ -21,8 +21,9 @@ pub struct WebDavBackend {
 impl WebDavBackend {
     pub fn new(endpoint_url: &str, credentials: Option<&str>) -> AppResult<Self> {
         let (username, password) = if let Some(creds) = credentials {
-            let parsed: serde_json::Value = serde_json::from_str(creds)
-                .map_err(|e| crate::errors::AppError::InvalidInput(format!("invalid credentials: {e}")))?;
+            let parsed: serde_json::Value = serde_json::from_str(creds).map_err(|e| {
+                crate::errors::AppError::InvalidInput(format!("invalid credentials: {e}"))
+            })?;
             let user = parsed["username"].as_str().unwrap_or("").to_string();
             let pass = parsed["password"].as_str().unwrap_or("").to_string();
             (user, pass)
@@ -54,9 +55,15 @@ impl SyncBackend for WebDavBackend {
         if !self.username.is_empty() {
             req = req.basic_auth(&self.username, Some(&self.password));
         }
-        let resp = req.send().await.map_err(|e| crate::errors::AppError::Internal(format!("WebDAV PUT: {e}")))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| crate::errors::AppError::Internal(format!("WebDAV PUT: {e}")))?;
         if !resp.status().is_success() {
-            return Err(crate::errors::AppError::Internal(format!("WebDAV PUT: {}", resp.status())));
+            return Err(crate::errors::AppError::Internal(format!(
+                "WebDAV PUT: {}",
+                resp.status()
+            )));
         }
         Ok(())
     }
@@ -68,11 +75,18 @@ impl SyncBackend for WebDavBackend {
         if !self.username.is_empty() {
             req = req.basic_auth(&self.username, Some(&self.password));
         }
-        let resp = req.send().await.map_err(|e| crate::errors::AppError::Internal(format!("WebDAV GET: {e}")))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| crate::errors::AppError::Internal(format!("WebDAV GET: {e}")))?;
         if !resp.status().is_success() {
-            return Err(crate::errors::AppError::Internal(format!("WebDAV GET: {}", resp.status())));
+            return Err(crate::errors::AppError::Internal(format!(
+                "WebDAV GET: {}",
+                resp.status()
+            )));
         }
-        resp.bytes().await
+        resp.bytes()
+            .await
             .map(|b| b.to_vec())
             .map_err(|e| crate::errors::AppError::Internal(format!("WebDAV GET body: {e}")))
     }
@@ -88,12 +102,21 @@ impl SyncBackend for WebDavBackend {
         if !self.username.is_empty() {
             req = req.basic_auth(&self.username, Some(&self.password));
         }
-        let resp = req.send().await.map_err(|e| crate::errors::AppError::Internal(format!("WebDAV PROPFIND: {e}")))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| crate::errors::AppError::Internal(format!("WebDAV PROPFIND: {e}")))?;
         if !resp.status().is_success() {
-            return Err(crate::errors::AppError::Internal(format!("WebDAV PROPFIND: {}", resp.status())));
+            return Err(crate::errors::AppError::Internal(format!(
+                "WebDAV PROPFIND: {}",
+                resp.status()
+            )));
         }
 
-        let body = resp.text().await.map_err(|e| crate::errors::AppError::Internal(format!("WebDAV body: {e}")))?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| crate::errors::AppError::Internal(format!("WebDAV body: {e}")))?;
 
         // Parse D:href from PROPFIND response.
         let mut ids = Vec::new();
@@ -103,7 +126,10 @@ impl SyncBackend for WebDavBackend {
             if let Some(end) = after.find("</D:href>") {
                 let href = &after[..end];
                 // Strip base URL prefix to get object ID.
-                if let Some(id) = href.strip_prefix(&self.base_url).and_then(|s| s.strip_prefix('/')) {
+                if let Some(id) = href
+                    .strip_prefix(&self.base_url)
+                    .and_then(|s| s.strip_prefix('/'))
+                {
                     if !id.is_empty() {
                         ids.push(id.to_string());
                     }
@@ -123,9 +149,15 @@ impl SyncBackend for WebDavBackend {
         if !self.username.is_empty() {
             req = req.basic_auth(&self.username, Some(&self.password));
         }
-        let resp = req.send().await.map_err(|e| crate::errors::AppError::Internal(format!("WebDAV DELETE: {e}")))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| crate::errors::AppError::Internal(format!("WebDAV DELETE: {e}")))?;
         if !resp.status().is_success() {
-            return Err(crate::errors::AppError::Internal(format!("WebDAV DELETE: {}", resp.status())));
+            return Err(crate::errors::AppError::Internal(format!(
+                "WebDAV DELETE: {}",
+                resp.status()
+            )));
         }
         Ok(())
     }

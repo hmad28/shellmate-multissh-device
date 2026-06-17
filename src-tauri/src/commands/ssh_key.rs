@@ -46,13 +46,19 @@ pub async fn ssh_key_generate(
             let priv_b64 = base64_engine::encode(&priv_bytes);
             let priv_pem = if let Some(ref _pp) = passphrase {
                 // Encrypt with passphrase (simplified — in production use proper OpenSSH format)
-                format!("-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----", priv_b64)
+                format!(
+                    "-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----",
+                    priv_b64
+                )
             } else {
-                format!("-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----", priv_b64)
+                format!(
+                    "-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----",
+                    priv_b64
+                )
             };
 
             // Fingerprint (SHA256 of public key)
-            use sha2::{Sha256, Digest};
+            use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
             hasher.update(&pub_bytes);
             let fp = format!("SHA256:{}", base64_engine::encode(&hasher.finalize()));
@@ -66,9 +72,9 @@ pub async fn ssh_key_generate(
             ));
         }
         _ => {
-            return Err(crate::errors::AppError::InvalidInput(
-                format!("Unsupported key type: {key_type}. Use 'ed25519'."),
-            ));
+            return Err(crate::errors::AppError::InvalidInput(format!(
+                "Unsupported key type: {key_type}. Use 'ed25519'."
+            )));
         }
     };
 
@@ -128,10 +134,7 @@ pub async fn ssh_key_list(state: State<'_, AppState>) -> AppResult<Vec<SshKey>> 
 
 /// Get the private key for an SSH key (decrypted).
 #[tauri::command]
-pub async fn ssh_key_get_private(
-    state: State<'_, AppState>,
-    key_id: String,
-) -> AppResult<String> {
+pub async fn ssh_key_get_private(state: State<'_, AppState>, key_id: String) -> AppResult<String> {
     let conn = state.db.lock();
     let (ct, nonce_bytes): (Vec<u8>, Vec<u8>) = conn.query_row(
         "SELECT encrypted_private_key, private_key_nonce FROM ssh_keys WHERE id = ?1",
@@ -141,17 +144,17 @@ pub async fn ssh_key_get_private(
 
     let mut nonce = [0u8; 12];
     nonce.copy_from_slice(&nonce_bytes);
-    let blob = crate::crypto::EncryptedBlob { ciphertext: ct, nonce };
+    let blob = crate::crypto::EncryptedBlob {
+        ciphertext: ct,
+        nonce,
+    };
     let plaintext = state.vault.decrypt(&blob)?;
     Ok(String::from_utf8_lossy(&plaintext).to_string())
 }
 
 /// Delete an SSH key.
 #[tauri::command]
-pub async fn ssh_key_delete(
-    state: State<'_, AppState>,
-    key_id: String,
-) -> AppResult<()> {
+pub async fn ssh_key_delete(state: State<'_, AppState>, key_id: String) -> AppResult<()> {
     let conn = state.db.lock();
     conn.execute("DELETE FROM ssh_keys WHERE id = ?1", [&key_id])?;
     Ok(())
@@ -159,10 +162,7 @@ pub async fn ssh_key_delete(
 
 /// Copy public key to clipboard (returns the key).
 #[tauri::command]
-pub async fn ssh_key_get_public(
-    state: State<'_, AppState>,
-    key_id: String,
-) -> AppResult<String> {
+pub async fn ssh_key_get_public(state: State<'_, AppState>, key_id: String) -> AppResult<String> {
     let conn = state.db.lock();
     let public_key: String = conn.query_row(
         "SELECT public_key FROM ssh_keys WHERE id = ?1",

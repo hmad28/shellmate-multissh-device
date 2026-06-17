@@ -2,9 +2,9 @@ import { useEffect } from 'react';
 import {
   Search,
   Code2,
+  Smartphone,
   Settings as SettingsIcon,
   Shield,
-  Wifi,
   PanelLeftClose,
   PanelLeftOpen,
   Activity,
@@ -58,12 +58,25 @@ export function Sidebar() {
         aria-label="Hosts sidebar"
       >
         <div className="flex h-full w-60 flex-col">
-          <div className="border-b border-border-subtle p-3 flex flex-col gap-2">
+          <div className="flex flex-col gap-2 border-b border-border-subtle p-3">
             <SearchInput value={searchQuery} onChange={setSearchQuery} />
             <button
               type="button"
+              onClick={() => setActivePanel('p2p-sync')}
+              className={cn(
+                'flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold shadow-sm transition-all duration-200 active:scale-95',
+                activePanel === 'p2p-sync'
+                  ? 'bg-[var(--color-accent-hover)] text-white'
+                  : 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]',
+              )}
+            >
+              <Smartphone size={12} />
+              <span>Sync Phone</span>
+            </button>
+            <button
+              type="button"
               onClick={handleOpenLocalTerminal}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white py-1.5 text-xs font-semibold shadow-sm transition-all duration-200 active:scale-95"
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border-strong bg-bg-elevated py-1.5 text-xs font-semibold text-fg transition-all duration-200 hover:bg-bg-panel active:scale-95"
             >
               <Activity size={12} />
               <span>Open Local Terminal</span>
@@ -105,8 +118,8 @@ export function Sidebar() {
               }
             />
             <PanelButton
-              icon={<Wifi size={14} />}
-              label={strings.p2pSync?.title ?? 'P2P Sync'}
+              icon={<Smartphone size={14} />}
+              label="Sync Phone"
               active={activePanel === 'p2p-sync'}
               onClick={() =>
                 setActivePanel(
@@ -129,9 +142,7 @@ export function Sidebar() {
               label="Docker"
               active={activePanel === 'docker'}
               onClick={() =>
-                setActivePanel(
-                  activePanel === 'docker' ? 'hosts' : 'docker',
-                )
+                setActivePanel(activePanel === 'docker' ? 'hosts' : 'docker')
               }
             />
             <PanelButton
@@ -139,9 +150,7 @@ export function Sidebar() {
               label="Import Hosts"
               active={activePanel === 'import'}
               onClick={() =>
-                setActivePanel(
-                  activePanel === 'import' ? 'hosts' : 'import',
-                )
+                setActivePanel(activePanel === 'import' ? 'hosts' : 'import')
               }
             />
 

@@ -23,7 +23,10 @@ pub fn create_backend(
     match backend_type {
         "http" => Ok(Box::new(http::HttpBackend::new(endpoint_url, credentials)?)),
         "s3" => Ok(Box::new(s3::S3Backend::new(endpoint_url, credentials)?)),
-        "webdav" => Ok(Box::new(webdav::WebDavBackend::new(endpoint_url, credentials)?)),
+        "webdav" => Ok(Box::new(webdav::WebDavBackend::new(
+            endpoint_url,
+            credentials,
+        )?)),
         _ => Err(AppError::InvalidInput(format!(
             "unsupported sync backend: {backend_type}"
         ))),

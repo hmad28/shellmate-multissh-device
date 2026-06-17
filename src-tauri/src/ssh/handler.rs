@@ -54,19 +54,15 @@ impl client::Handler for ClientHandler {
         let public_key_blob = server_public_key.public_key_bytes();
 
         // Verify the host key against known_hosts
-        let result = self
-            .known_hosts
-            .verify_host_key(&self.hostname, self.port, key_type, &public_key_blob);
+        let result =
+            self.known_hosts
+                .verify_host_key(&self.hostname, self.port, key_type, &public_key_blob);
 
         match result {
             Ok(verification) => {
                 if verification.verified {
                     // Key is known and trusted
-                    log::info!(
-                        "Host key verified for {}:{}",
-                        self.hostname,
-                        self.port
-                    );
+                    log::info!("Host key verified for {}:{}", self.hostname, self.port);
                     Ok(true)
                 } else if verification.is_new {
                     // New host - emit event for user verification
@@ -76,7 +72,7 @@ impl client::Handler for ClientHandler {
                         self.port,
                         verification.presented_fingerprint
                     );
-                    
+
                     // Emit verification request event
                     let _ = self.app_handle.emit(
                         "ssh:host-key-verification",
@@ -91,7 +87,7 @@ impl client::Handler for ClientHandler {
                             "storedFingerprint": verification.stored_fingerprint,
                         }),
                     );
-                    
+
                     // Reject connection - frontend will show dialog and retry if trusted
                     Ok(false)
                 } else {

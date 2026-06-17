@@ -17,9 +17,13 @@ pub async fn sync_configure(
     credentials: String,
 ) -> AppResult<()> {
     let conn = state.db.lock();
-    state
-        .sync
-        .configure(&conn, &state.vault, &backend_type, &endpoint_url, &credentials)
+    state.sync.configure(
+        &conn,
+        &state.vault,
+        &backend_type,
+        &endpoint_url,
+        &credentials,
+    )
 }
 
 #[tauri::command]

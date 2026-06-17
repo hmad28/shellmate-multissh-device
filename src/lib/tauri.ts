@@ -43,7 +43,15 @@ import type {
 import type { Plugin, PluginCapability } from '@/types/plugin';
 import type { AuditEvent, AuditSettings, AuditQuery } from '@/types/audit';
 import type { ServerStats } from '@/types/server-stats';
-import type { SessionRecording, SessionEvent, SshKey, LocalSession, SftpTransfer, ParsedHost, ConnectionDiagnostics } from '@/types/advanced';
+import type {
+  SessionRecording,
+  SessionEvent,
+  SshKey,
+  LocalSession,
+  SftpTransfer,
+  ParsedHost,
+  ConnectionDiagnostics,
+} from '@/types/advanced';
 
 /**
  * Typed wrappers around Tauri `invoke`.
@@ -167,8 +175,18 @@ export const tauri = {
     generateKeypair: () => invoke<string>('vip_generate_keypair'),
     injectAuthorizedKeys: (pubkeyHex: string, asAdmin?: boolean) =>
       invoke<string>('vip_inject_authorized_keys', { pubkeyHex, asAdmin }),
-    createLocalhostHost: (credentialId: string, label?: string, username?: string, asAdmin?: boolean) =>
-      invoke<string>('vip_create_localhost_host', { credentialId, label, username, asAdmin }),
+    createLocalhostHost: (
+      credentialId: string,
+      label?: string,
+      username?: string,
+      asAdmin?: boolean,
+    ) =>
+      invoke<string>('vip_create_localhost_host', {
+        credentialId,
+        label,
+        username,
+        asAdmin,
+      }),
     getKeyStatus: () =>
       invoke<{
         hostExists: boolean;
@@ -181,34 +199,74 @@ export const tauri = {
     startSyncServer: () => invoke<string>('p2p_start_sync_server'),
     stopSyncServer: () => invoke<void>('p2p_stop_sync_server'),
     getSyncStatus: () =>
-      invoke<{ isRunning: boolean; hasPin: boolean }>('p2p_get_sync_status'),
+      invoke<{
+        isRunning: boolean;
+        hasPin: boolean;
+        pairingCode?: string | null;
+      }>('p2p_get_sync_status'),
+    listPairedDevices: () =>
+      invoke<
+        {
+          id: string;
+          deviceName: string;
+          boundIp: string;
+          pairedAt: string;
+          lastSeenAt: string;
+          revokedAt?: string | null;
+        }[]
+      >('p2p_list_paired_devices'),
+    revokePairedDevice: (deviceId: string) =>
+      invoke<void>('p2p_revoke_paired_device', { deviceId }),
     exportForSync: () => invoke<string>('p2p_export_for_sync'),
+    pairWithDesktop: (pairingCode: string, deviceName?: string) =>
+      invoke<string>('p2p_pair_with_desktop', {
+        pairingCode,
+        deviceName: deviceName ?? null,
+      }),
+    syncWithSavedDesktop: () => invoke<string>('p2p_sync_with_saved_desktop'),
   },
   app: {
     version: () => invoke<string>('app_version'),
   },
   git: {
     getInfo: (path?: string) =>
-      invoke<{ branch: string | null; hasChanges: boolean; ahead: number; behind: number }>(
-        'git_get_info',
-        { path },
-      ),
+      invoke<{
+        branch: string | null;
+        hasChanges: boolean;
+        ahead: number;
+        behind: number;
+      }>('git_get_info', { path }),
   },
   history: {
-    add: (input: { sessionId: string; command: string; exitCode?: number; workingDir?: string }) =>
-      invoke<string>('history_add', { input }),
+    add: (input: {
+      sessionId: string;
+      command: string;
+      exitCode?: number;
+      workingDir?: string;
+    }) => invoke<string>('history_add', { input }),
     list: (sessionId?: string, limit?: number) =>
-      invoke<{ id: string; sessionId: string; command: string; exitCode: number | null; workingDir: string | null; executedAt: string }[]>(
-        'history_list',
-        { sessionId, limit },
-      ),
+      invoke<
+        {
+          id: string;
+          sessionId: string;
+          command: string;
+          exitCode: number | null;
+          workingDir: string | null;
+          executedAt: string;
+        }[]
+      >('history_list', { sessionId, limit }),
     search: (query: string, limit?: number) =>
-      invoke<{ id: string; sessionId: string; command: string; exitCode: number | null; workingDir: string | null; executedAt: string }[]>(
-        'history_search',
-        { query, limit },
-      ),
-    clear: (sessionId?: string) =>
-      invoke<void>('history_clear', { sessionId }),
+      invoke<
+        {
+          id: string;
+          sessionId: string;
+          command: string;
+          exitCode: number | null;
+          workingDir: string | null;
+          executedAt: string;
+        }[]
+      >('history_search', { query, limit }),
+    clear: (sessionId?: string) => invoke<void>('history_clear', { sessionId }),
   },
   biometric: {
     status: () => invoke<BiometricStatus>('biometric_status'),
@@ -229,11 +287,9 @@ export const tauri = {
     resume: () => invoke<void>('sync_resume'),
   },
   team: {
-    create: (input: CreateTeamInput) =>
-      invoke<Team>('team_create', { input }),
+    create: (input: CreateTeamInput) => invoke<Team>('team_create', { input }),
     list: () => invoke<Team[]>('team_list'),
-    delete: (teamId: string) =>
-      invoke<void>('team_delete', { teamId }),
+    delete: (teamId: string) => invoke<void>('team_delete', { teamId }),
     addMember: (input: AddMemberInput) =>
       invoke<TeamMember>('team_add_member', { input }),
     listMembers: (teamId: string) =>
@@ -253,10 +309,8 @@ export const tauri = {
       invoke<Plugin>('plugin_install', { manifestJson, wasmPath }),
     uninstall: (pluginId: string) =>
       invoke<void>('plugin_uninstall', { pluginId }),
-    enable: (pluginId: string) =>
-      invoke<void>('plugin_enable', { pluginId }),
-    disable: (pluginId: string) =>
-      invoke<void>('plugin_disable', { pluginId }),
+    enable: (pluginId: string) => invoke<void>('plugin_enable', { pluginId }),
+    disable: (pluginId: string) => invoke<void>('plugin_disable', { pluginId }),
     getCapabilities: (pluginId: string) =>
       invoke<PluginCapability[]>('plugin_get_capabilities', { pluginId }),
     grantCapability: (pluginId: string, capability: string) =>
@@ -268,11 +322,14 @@ export const tauri = {
   },
   audit: {
     record: (eventType: string, payload: string, hostId?: string) =>
-      invoke<string>('audit_record', { eventType, hostId: hostId ?? null, payload }),
+      invoke<string>('audit_record', {
+        eventType,
+        hostId: hostId ?? null,
+        payload,
+      }),
     query: (filter: AuditQuery) =>
       invoke<AuditEvent[]>('audit_query', { filter }),
-    export: (filter: AuditQuery) =>
-      invoke<string>('audit_export', { filter }),
+    export: (filter: AuditQuery) => invoke<string>('audit_export', { filter }),
     purge: () => invoke<number>('audit_purge'),
     getSettings: (hostId: string) =>
       invoke<AuditSettings | null>('audit_get_settings', { hostId }),
@@ -283,7 +340,10 @@ export const tauri = {
     hostsEncrypted: (password: string) =>
       invoke<string>('export_hosts_encrypted', { exportPassword: password }),
     importHostsEncrypted: (data: string, password: string) =>
-      invoke<number>('import_hosts_encrypted', { exportData: data, exportPassword: password }),
+      invoke<number>('import_hosts_encrypted', {
+        exportData: data,
+        exportPassword: password,
+      }),
   },
   serverStats: {
     exec: (hostId: string) =>
@@ -305,15 +365,24 @@ export const tauri = {
       invoke<void>('recording_delete', { recordingId }),
   },
   sshKey: {
-    generate: (name: string, keyType: string, bits: number, passphrase?: string) =>
-      invoke<SshKey>('ssh_key_generate', { name, keyType, bits, passphrase: passphrase ?? null }),
+    generate: (
+      name: string,
+      keyType: string,
+      bits: number,
+      passphrase?: string,
+    ) =>
+      invoke<SshKey>('ssh_key_generate', {
+        name,
+        keyType,
+        bits,
+        passphrase: passphrase ?? null,
+      }),
     list: () => invoke<SshKey[]>('ssh_key_list'),
     getPrivate: (keyId: string) =>
       invoke<string>('ssh_key_get_private', { keyId }),
     getPublic: (keyId: string) =>
       invoke<string>('ssh_key_get_public', { keyId }),
-    delete: (keyId: string) =>
-      invoke<void>('ssh_key_delete', { keyId }),
+    delete: (keyId: string) => invoke<void>('ssh_key_delete', { keyId }),
   },
   localShell: {
     spawn: (shell?: string) =>
@@ -327,8 +396,18 @@ export const tauri = {
     list: () => invoke<string[]>('local_shell_list'),
   },
   hostTransfer: {
-    start: (sourceHostId: string, sourcePath: string, destHostId: string, destPath: string) =>
-      invoke<SftpTransfer>('sftp_host_transfer', { sourceHostId, sourcePath, destHostId, destPath }),
+    start: (
+      sourceHostId: string,
+      sourcePath: string,
+      destHostId: string,
+      destPath: string,
+    ) =>
+      invoke<SftpTransfer>('sftp_host_transfer', {
+        sourceHostId,
+        sourcePath,
+        destHostId,
+        destPath,
+      }),
   },
   sshConfig: {
     import: (content: string) =>

@@ -3,19 +3,13 @@ use crate::state::AppState;
 use tauri::State;
 
 #[tauri::command]
-pub async fn broadcast_add(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> AppResult<()> {
+pub async fn broadcast_add(state: State<'_, AppState>, session_id: String) -> AppResult<()> {
     state.broadcast.add_to_broadcast(&session_id);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn broadcast_remove(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> AppResult<()> {
+pub async fn broadcast_remove(state: State<'_, AppState>, session_id: String) -> AppResult<()> {
     state.broadcast.remove_from_broadcast(&session_id);
     Ok(())
 }

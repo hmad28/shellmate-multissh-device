@@ -52,18 +52,18 @@ impl BiometricProvider for WindowsHelloProvider {
 
 /// Verify the user via Windows Hello by opening/creating a key.
 fn verify_with_hello(reason: &str) -> Result<bool, String> {
+    use windows::core::HSTRING;
     use windows::Security::Credentials::{
         KeyCredentialCreationOption, KeyCredentialManager, KeyCredentialStatus,
     };
-    use windows::core::HSTRING;
 
     info!("Windows Hello verification requested: {reason}");
 
     let name = HSTRING::from(KEY_NAME);
 
     // Try to open an existing key — this triggers Windows Hello verification.
-    let open_op = KeyCredentialManager::OpenAsync(&name)
-        .map_err(|e| format!("OpenAsync failed: {e}"))?;
+    let open_op =
+        KeyCredentialManager::OpenAsync(&name).map_err(|e| format!("OpenAsync failed: {e}"))?;
 
     let mut need_create = false;
     loop {

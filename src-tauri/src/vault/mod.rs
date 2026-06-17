@@ -125,10 +125,7 @@ impl Vault {
 
     /// Verify password using vault metadata file (no DB needed).
     /// Returns the master key on success.
-    pub fn verify_from_meta(
-        db_path: &std::path::Path,
-        password: &str,
-    ) -> AppResult<[u8; 32]> {
+    pub fn verify_from_meta(db_path: &std::path::Path, password: &str) -> AppResult<[u8; 32]> {
         let (salt, nonce_bytes, ciphertext) = crate::db::read_vault_meta(db_path)?;
 
         let mut master_key = crypto::derive_key(password.as_bytes(), &salt)?;
@@ -174,12 +171,12 @@ impl Vault {
             SETTING_VAULT_VERIFIER_CIPHERTEXT,
             &hex(&verifier.ciphertext),
         )?;
+        set_setting(conn, SETTING_VAULT_VERIFIER_NONCE, &hex(&verifier.nonce))?;
         set_setting(
             conn,
-            SETTING_VAULT_VERIFIER_NONCE,
-            &hex(&verifier.nonce),
+            SETTING_VAULT_AUTOLOCK_SECS,
+            &DEFAULT_AUTOLOCK_SECS.to_string(),
         )?;
-        set_setting(conn, SETTING_VAULT_AUTOLOCK_SECS, &DEFAULT_AUTOLOCK_SECS.to_string())?;
         set_setting(conn, SETTING_VAULT_INITIALIZED, "1")?;
 
         let mut inner = self.inner.write();
@@ -286,8 +283,10 @@ impl Vault {
         let current_nonce = unhex_fixed::<NONCE_LEN>(&nonce_hex)?;
         let current_ciphertext = unhex(&ct_hex)?;
 
-        let mut current_master_key = crypto::derive_key(current_password.as_bytes(), &current_salt)?;
-        let (mut current_vault_key, _current_db_key) = crypto::derive_vault_and_db_keys(&current_master_key);
+        let mut current_master_key =
+            crypto::derive_key(current_password.as_bytes(), &current_salt)?;
+        let (mut current_vault_key, _current_db_key) =
+            crypto::derive_vault_and_db_keys(&current_master_key);
         current_master_key.zeroize();
         let blob = EncryptedBlob {
             ciphertext: current_ciphertext,
@@ -319,8 +318,7 @@ impl Vault {
 
         // Read all credentials, decrypt with current key, re-encrypt with new key.
         let credentials: Vec<(String, Vec<u8>, Vec<u8>)> = {
-            let mut stmt = tx
-                .prepare("SELECT id, encrypted_data, nonce FROM credentials")?;
+            let mut stmt = tx.prepare("SELECT id, encrypted_data, nonce FROM credentials")?;
             let rows = stmt.query_map([], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
@@ -343,7 +341,10 @@ impl Vault {
             }
             let mut nonce = [0u8; NONCE_LEN];
             nonce.copy_from_slice(&nonce_bytes);
-            let blob = EncryptedBlob { ciphertext: ct, nonce };
+            let blob = EncryptedBlob {
+                ciphertext: ct,
+                nonce,
+            };
             let plaintext = match crypto::decrypt(&current_vault_key, &blob) {
                 Ok(p) => p,
                 Err(_) => {
@@ -401,10 +402,7 @@ impl Vault {
         tx.execute(
             "INSERT INTO settings (key, value) VALUES (?1, ?2)
              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            rusqlite::params![
-                SETTING_VAULT_VERIFIER_NONCE,
-                hex(&new_verifier.nonce)
-            ],
+            rusqlite::params![SETTING_VAULT_VERIFIER_NONCE, hex(&new_verifier.nonce)],
         )?;
 
         tx.commit()?;
@@ -446,11 +444,9 @@ fn validate_password(password: &str) -> AppResult<()> {
 
 fn get_setting(conn: &Connection, key: &str) -> AppResult<Option<String>> {
     let result = conn
-        .query_row(
-            "SELECT value FROM settings WHERE key = ?1",
-            [key],
-            |row| row.get::<_, String>(0),
-        )
+        .query_row("SELECT value FROM settings WHERE key = ?1", [key], |row| {
+            row.get::<_, String>(0)
+        })
         .map(Some)
         .or_else(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => Ok(None),

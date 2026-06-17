@@ -88,7 +88,7 @@ impl KnownHostsManager {
 
         // Look up existing host key
         let mut stmt = db.prepare(
-            "SELECT id, fingerprint, key_type FROM known_hosts WHERE hostname = ?1 AND port = ?2",
+            "SELECT id, fingerprint, key_type, trusted FROM known_hosts WHERE hostname = ?1 AND port = ?2",
         )?;
 
         let result = stmt.query_row(params![hostname, port as i32], |row| {
@@ -96,14 +96,16 @@ impl KnownHostsManager {
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
+                row.get::<_, bool>(3)?,
             ))
         });
 
         match result {
-            Ok((host_id, stored_fingerprint, stored_key_type)) => {
+            Ok((host_id, stored_fingerprint, stored_key_type, trusted)) => {
                 // Host exists - check if key matches
                 let verified = stored_fingerprint == presented_fingerprint
-                    && stored_key_type == key_type;
+                    && stored_key_type == key_type
+                    && trusted;
 
                 Ok(HostKeyVerificationResult {
                     verified,
@@ -185,5 +187,8 @@ fn calculate_fingerprint(public_key_blob: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(public_key_blob);
     let result = hasher.finalize();
-    format!("SHA256:{}", base64::engine::general_purpose::STANDARD.encode(result))
+    format!(
+        "SHA256:{}",
+        base64::engine::general_purpose::STANDARD.encode(result)
+    )
 }

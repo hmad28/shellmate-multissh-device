@@ -40,7 +40,9 @@ pub fn decrypt(key: &[u8; 32], blob: &EncryptedBlob) -> AppResult<Vec<u8>> {
     let nonce = Nonce::from_slice(&blob.nonce);
     cipher
         .decrypt(nonce, blob.ciphertext.as_ref())
-        .map_err(|_| AppError::InvalidInput("decryption failed (wrong key or tampered data)".into()))
+        .map_err(|_| {
+            AppError::InvalidInput("decryption failed (wrong key or tampered data)".into())
+        })
 }
 
 #[cfg(test)]

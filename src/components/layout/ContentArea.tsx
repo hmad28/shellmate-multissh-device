@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Maximize2, Minimize2, Smartphone } from 'lucide-react';
 import { QuickConnect } from '@/components/connect/QuickConnect';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { SnippetPanel } from '@/components/snippets/SnippetPanel';
@@ -16,6 +16,7 @@ import { Terminal } from '@/components/terminal/Terminal';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
 import { useUiStore } from '@/stores/ui-store';
+import { tauri } from '@/lib/tauri';
 import {
   usePaneStore,
   getAllLeaves,
@@ -124,7 +125,7 @@ export function ContentArea() {
       </PopupDialog>
       <PopupDialog
         open={p2pOpen}
-        title="P2P Local Sync"
+        title="Sync Phone"
         onClose={() => {
           setP2pOpen(false);
           if (activePanel === 'p2p-sync') setActivePanel('hosts');
@@ -193,14 +194,24 @@ function HostsContent() {
   const setActiveTabInPane = usePaneStore((s) => s.setActiveTabInPane);
   const vaultUnlocked = useVaultStore((s) => s.unlocked);
   const hoveredZoneType = useDragStore((s) => s.hoveredZoneType);
+  const setActivePanel = useUiStore((s) => s.setActivePanel);
   const isEmptyHovered = hoveredZoneType === 'empty';
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
   useEffect(() => {
     if (!vaultUnlocked) {
-      const leaf: LeafNode = { type: 'leaf', id: 'pane-1', tabIds: [], activeTabId: null };
-      usePaneStore.setState({ root: leaf, activePaneId: leaf.id, fullscreenPaneId: null });
+      const leaf: LeafNode = {
+        type: 'leaf',
+        id: 'pane-1',
+        tabIds: [],
+        activeTabId: null,
+      };
+      usePaneStore.setState({
+        root: leaf,
+        activePaneId: leaf.id,
+        fullscreenPaneId: null,
+      });
     }
   }, [vaultUnlocked]);
 
@@ -225,7 +236,15 @@ function HostsContent() {
           isEmptyHovered && 'bg-accent/5 ring-2 ring-inset ring-accent',
         )}
       >
-        <div className="m-auto w-full max-w-md">
+        <div className="m-auto flex w-full max-w-md flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => setActivePanel('p2p-sync')}
+            className="border-accent/60 flex w-full items-center justify-center gap-2 rounded-md border bg-accent px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-hover"
+          >
+            <Smartphone size={16} />
+            <span>Sync Device</span>
+          </button>
           <QuickConnect />
         </div>
       </main>
@@ -263,20 +282,29 @@ function SplitView({ node }: { node: SplitNode }) {
   const isH = node.direction === 'horizontal';
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const dragRef = useRef<{ idx: number; start: number; sizes: number[] } | null>(null);
+  const dragRef = useRef<{
+    idx: number;
+    start: number;
+    sizes: number[];
+  } | null>(null);
 
   const onResizeStart = useCallback(
     (idx: number, e: React.MouseEvent) => {
       e.preventDefault();
       setDragIdx(idx);
-      dragRef.current = { idx, start: isH ? e.clientX : e.clientY, sizes: [...node.sizes] };
+      dragRef.current = {
+        idx,
+        start: isH ? e.clientX : e.clientY,
+        sizes: [...node.sizes],
+      };
 
       const onMove = (ev: MouseEvent) => {
         const d = dragRef.current;
         if (!d || !containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
         const total = isH ? rect.width : rect.height;
-        const delta = (((isH ? ev.clientX : ev.clientY) - d.start) / total) * 100;
+        const delta =
+          (((isH ? ev.clientX : ev.clientY) - d.start) / total) * 100;
         const ns = [...d.sizes];
         const l = ns[d.idx] ?? 0;
         const r = ns[d.idx + 1] ?? 0;
@@ -301,7 +329,10 @@ function SplitView({ node }: { node: SplitNode }) {
   return (
     <div
       ref={containerRef}
-      className={cn('flex flex-1 overflow-hidden', isH ? 'flex-row' : 'flex-col')}
+      className={cn(
+        'flex flex-1 overflow-hidden',
+        isH ? 'flex-row' : 'flex-col',
+      )}
     >
       {node.children.map((child, idx) => (
         <SplitItem
@@ -388,7 +419,15 @@ function PaneView({ pane }: { pane: LeafNode }) {
         setActiveTabInPane(pane.id, tabId);
         setActivePane(pane.id);
       }}
-      onCloseTab={(tabId) => closeTabInPane(pane.id, tabId)}
+      onCloseTab={(tabId) => {
+        const sessionId = sessionByTab[tabId];
+        if (sessionId) {
+          void tauri.ssh.disconnect(sessionId).catch(() => {});
+          useSshStore.getState().unbind(tabId);
+        }
+        useTabStore.getState().closeTab(tabId);
+        closeTabInPane(pane.id, tabId);
+      }}
       onToggleFullscreen={() => toggleFullscreen(pane.id)}
     />
   );
@@ -440,24 +479,24 @@ const PaneViewContainer = React.memo(function PaneViewContainer({
       onClick={onSelectPane}
     >
       {/* Per-pane tab bar */}
-      <div
-        className={cn(
-          'flex h-8 shrink-0 items-stretch border-b border-border-subtle bg-bg-sidebar',
-        )}
-      >
-        <div className="flex flex-1 items-stretch overflow-x-auto">
-          {paneTabs.map((tab) => (
-            <PaneTab
-              key={tab.id}
-              tab={tab}
-              isActive={tab.id === pane.activeTabId}
-              onSelect={() => onSelectTab(tab.id)}
-              onClose={() => onCloseTab(tab.id)}
-            />
-          ))}
-        </div>
-        <div className="flex items-center gap-0.5 px-1">
-          {leafCount > 1 && (
+      {leafCount > 1 && (
+        <div
+          className={cn(
+            'flex h-8 shrink-0 items-stretch border-b border-border-subtle bg-bg-sidebar',
+          )}
+        >
+          <div className="flex flex-1 items-stretch overflow-x-auto">
+            {paneTabs.map((tab) => (
+              <PaneTab
+                key={tab.id}
+                tab={tab}
+                isActive={tab.id === pane.activeTabId}
+                onSelect={() => onSelectTab(tab.id)}
+                onClose={() => onCloseTab(tab.id)}
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-0.5 px-1">
             <button
               type="button"
               onClick={onToggleFullscreen}
@@ -466,9 +505,9 @@ const PaneViewContainer = React.memo(function PaneViewContainer({
             >
               {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
             </button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Terminal content */}
       <div className="relative flex-1 overflow-hidden">
@@ -526,7 +565,15 @@ function PaneTab({
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
       if (Math.sqrt(dx * dx + dy * dy) > 5) {
-        useDragStore.getState().startDrag('tab', tab.id, tab.label, moveEvent.clientX, moveEvent.clientY);
+        useDragStore
+          .getState()
+          .startDrag(
+            'tab',
+            tab.id,
+            tab.label,
+            moveEvent.clientX,
+            moveEvent.clientY,
+          );
         window.removeEventListener('mousemove', handleMouseMove);
       }
     };
@@ -575,7 +622,8 @@ function PaneTab({
 }
 
 function StatusDot({ status }: { status: string }) {
-  const symbol = status === 'connected' ? '●' : status === 'connecting' ? '◐' : '○';
+  const symbol =
+    status === 'connected' ? '●' : status === 'connecting' ? '◐' : '○';
   return (
     <span
       className={cn(
@@ -598,32 +646,34 @@ function DropZoneOverlay({ region }: { region: string }) {
       {/* Quadrant indicators */}
       <div
         className={cn(
-          'absolute left-0 top-0 bottom-0 w-1/4 rounded-l transition-colors duration-100',
+          'absolute bottom-0 left-0 top-0 w-1/4 rounded-l transition-colors duration-100',
           region === 'left' && 'bg-accent/20 border-r-2 border-accent',
         )}
       />
       <div
         className={cn(
-          'absolute right-0 top-0 bottom-0 w-1/4 rounded-r transition-colors duration-100',
+          'absolute bottom-0 right-0 top-0 w-1/4 rounded-r transition-colors duration-100',
           region === 'right' && 'bg-accent/20 border-l-2 border-accent',
         )}
       />
       <div
         className={cn(
           'absolute left-1/4 right-1/4 top-0 h-1/4 transition-colors duration-100',
-          region === 'top' && 'bg-accent/20 border-b-2 border-accent rounded-t',
+          region === 'top' && 'bg-accent/20 rounded-t border-b-2 border-accent',
         )}
       />
       <div
         className={cn(
-          'absolute left-1/4 right-1/4 bottom-0 h-1/4 transition-colors duration-100',
-          region === 'bottom' && 'bg-accent/20 border-t-2 border-accent rounded-b',
+          'absolute bottom-0 left-1/4 right-1/4 h-1/4 transition-colors duration-100',
+          region === 'bottom' &&
+            'bg-accent/20 rounded-b border-t-2 border-accent',
         )}
       />
       <div
         className={cn(
-          'absolute left-1/4 right-1/4 top-1/4 bottom-1/4 rounded transition-colors duration-100',
-          region === 'center' && 'bg-accent/15 border-2 border-dashed border-accent',
+          'absolute bottom-1/4 left-1/4 right-1/4 top-1/4 rounded transition-colors duration-100',
+          region === 'center' &&
+            'bg-accent/15 border-2 border-dashed border-accent',
         )}
       />
     </div>
@@ -645,7 +695,9 @@ function ServerStatsPanelWrapper() {
   if (!selectedHost) {
     return (
       <div className="h-full overflow-y-auto p-4">
-        <h2 className="mb-4 text-lg font-semibold text-[var(--color-fg)]">Select a host to view stats</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-fg)]">
+          Select a host to view stats
+        </h2>
         <div className="space-y-2">
           {hosts.map((h) => (
             <button
@@ -653,8 +705,12 @@ function ServerStatsPanelWrapper() {
               onClick={() => setSelectedHost(h.id)}
               className="flex w-full items-center gap-3 rounded-lg border border-[var(--color-border)] p-3 text-left hover:bg-[var(--color-bg-elevated)]"
             >
-              <span className="font-medium text-[var(--color-fg)]">{h.label}</span>
-              <span className="text-xs text-[var(--color-fg-muted)]">{h.hostname}:{h.port}</span>
+              <span className="font-medium text-[var(--color-fg)]">
+                {h.label}
+              </span>
+              <span className="text-xs text-[var(--color-fg-muted)]">
+                {h.hostname}:{h.port}
+              </span>
             </button>
           ))}
         </div>
@@ -663,7 +719,12 @@ function ServerStatsPanelWrapper() {
   }
 
   const host = hosts.find((h) => h.id === selectedHost);
-  return <ServerStatsPanel hostId={selectedHost} hostLabel={host?.label || selectedHost} />;
+  return (
+    <ServerStatsPanel
+      hostId={selectedHost}
+      hostLabel={host?.label || selectedHost}
+    />
+  );
 }
 
 function DockerPanelWrapper() {
@@ -681,7 +742,9 @@ function DockerPanelWrapper() {
   if (!selectedHost) {
     return (
       <div className="h-full overflow-y-auto p-4">
-        <h2 className="mb-4 text-lg font-semibold text-[var(--color-fg)]">Select a host for Docker management</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-fg)]">
+          Select a host for Docker management
+        </h2>
         <div className="space-y-2">
           {hosts.map((h) => (
             <button
@@ -689,8 +752,12 @@ function DockerPanelWrapper() {
               onClick={() => setSelectedHost(h.id)}
               className="flex w-full items-center gap-3 rounded-lg border border-[var(--color-border)] p-3 text-left hover:bg-[var(--color-bg-elevated)]"
             >
-              <span className="font-medium text-[var(--color-fg)]">{h.label}</span>
-              <span className="text-xs text-[var(--color-fg-muted)]">{h.hostname}:{h.port}</span>
+              <span className="font-medium text-[var(--color-fg)]">
+                {h.label}
+              </span>
+              <span className="text-xs text-[var(--color-fg-muted)]">
+                {h.hostname}:{h.port}
+              </span>
             </button>
           ))}
         </div>

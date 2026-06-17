@@ -10,10 +10,14 @@ pub enum Resolution {
 /// A conflict exists when both sides have changes the other doesn't.
 pub fn has_conflict(local: &VersionVector, remote: &VersionVector) -> bool {
     let local_newer = local.iter().any(|(device, &count)| {
-        remote.get(device).map_or(true, |&remote_count| count > remote_count)
+        remote
+            .get(device)
+            .map_or(true, |&remote_count| count > remote_count)
     });
     let remote_newer = remote.iter().any(|(device, &count)| {
-        local.get(device).map_or(true, |&local_count| count > local_count)
+        local
+            .get(device)
+            .map_or(true, |&local_count| count > local_count)
     });
     local_newer && remote_newer
 }
@@ -61,10 +65,7 @@ mod tests {
     use std::collections::HashMap;
 
     fn vv(entries: &[(&str, u64)]) -> VersionVector {
-        entries
-            .iter()
-            .map(|(k, v)| (k.to_string(), *v))
-            .collect()
+        entries.iter().map(|(k, v)| (k.to_string(), *v)).collect()
     }
 
     #[test]

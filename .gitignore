@@ -28,6 +28,10 @@ npm-debug.log*
 
 # Temp files
 *.tmp
+*.tsbuildinfo
+vite.config.js
+.mimocode/
+perl_lib/
 .opencode/node_modules/
 
 # Agent / tooling configs (local only)

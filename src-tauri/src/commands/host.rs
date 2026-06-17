@@ -94,10 +94,7 @@ pub async fn get_hosts(state: State<'_, AppState>) -> AppResult<Vec<Host>> {
 }
 
 #[tauri::command]
-pub async fn create_host(
-    state: State<'_, AppState>,
-    input: HostInput,
-) -> AppResult<Host> {
+pub async fn create_host(state: State<'_, AppState>, input: HostInput) -> AppResult<Host> {
     validate(&input)?;
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
@@ -175,11 +172,10 @@ pub async fn update_host(
         return Err(AppError::NotFound(format!("host {id}")));
     }
 
-    let created_at: String = conn.query_row(
-        "SELECT created_at FROM hosts WHERE id = ?1",
-        [&id],
-        |row| row.get(0),
-    )?;
+    let created_at: String =
+        conn.query_row("SELECT created_at FROM hosts WHERE id = ?1", [&id], |row| {
+            row.get(0)
+        })?;
 
     Ok(Host {
         id,
@@ -210,16 +206,16 @@ pub async fn delete_host(state: State<'_, AppState>, id: String) -> AppResult<()
 /// Free-text search across host label, hostname, username, group name, and tags.
 /// Case-insensitive substring match.
 #[tauri::command]
-pub async fn search_hosts(
-    state: State<'_, AppState>,
-    query: String,
-) -> AppResult<Vec<Host>> {
+pub async fn search_hosts(state: State<'_, AppState>, query: String) -> AppResult<Vec<Host>> {
     let q = query.trim();
     if q.is_empty() {
         return get_hosts(state).await;
     }
     // Escape SQL LIKE wildcards to prevent unintended pattern matching
-    let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let escaped = q
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
     let pattern = format!("%{}%", escaped.to_lowercase());
 
     let conn = state.db.lock();

@@ -1,6 +1,6 @@
+use super::SyncBackend;
 use crate::errors::{AppError, AppResult};
 use async_trait::async_trait;
-use super::SyncBackend;
 
 /// Self-hosted HTTP sync backend.
 /// Expects a simple REST API:

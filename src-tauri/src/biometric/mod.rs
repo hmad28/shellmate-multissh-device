@@ -1,6 +1,6 @@
 use crate::errors::{AppError, AppResult};
-use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use hkdf::Hkdf;
 use rand::RngCore;
 use sha2::Sha256;

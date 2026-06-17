@@ -2,7 +2,7 @@
 
 **Version:** 2.3
 **Last Updated:** 2026-06-13
-**Status:** v0.2.0-beta — All 14 phases complete, ready for CI/CD, code signing, and release packaging
+**Status:** v0.2.0-beta — core workflows implemented; biometric unlock, encrypted team sharing, WASI plugin host APIs, CI/CD, code signing, cross-platform testing, and release packaging remain before v1.0
 
 ---
 
@@ -78,7 +78,7 @@ ShellMate v1.0 is a **production release**, not an MVP. Scope spans 14 phases de
 
 ## Phase Progress
 
-All 14 phases of the ShellMate v1.0 development plan are **complete** (2026-06-13).
+ShellMate has implemented the main local-first SSH workflows, but several production-track phases are still partial or deferred.
 
 | Phase | Status | Area |
 |-------|--------|------|
@@ -91,15 +91,15 @@ All 14 phases of the ShellMate v1.0 development plan are **complete** (2026-06-1
 | — | ✅ Complete (2026-06-11) | Phase 1–6 Integration & Stabilization |
 | — | ✅ Complete (2026-06-13) | Termul feature parity: Error Boundaries, Command Palette, Shortcuts, Git, Shell, History, Updater |
 | 7 | ✅ Complete (2026-06-13) | Full-DB Encryption (SQLCipher, HKDF key split, PRAGMA rekey) |
-| 8 | ✅ Complete (2026-06-13) | Biometric Unlock (Windows Hello, AES-GCM wrapping) |
+| 8 | Deferred | Biometric Unlock (disabled until OS-protected key wrapping is implemented) |
 | 9 | ✅ Complete (2026-06-13) | Multi-Device Sync (HTTP + S3 backends, version vectors, LWW) |
 | 10 | ✅ Complete (2026-06-13) | Mobile Apps (BottomNav, MobileKeyBar, useIsMobile, Android config) |
-| 11 | ✅ Complete (2026-06-13) | Team Vault (team CRUD, member management, host sharing) |
-| 12 | ✅ Complete (2026-06-13) | Plugin System (Wasmtime v29, manifest, capabilities, crash isolation) |
+| 11 | Partial | Team Vault (team CRUD only; member sharing disabled pending public-key wrapping and key rotation) |
+| 12 | Partial | Plugin System (Wasmtime no-import modules; WASI/host APIs deferred) |
 | 13 | ✅ Complete (2026-06-13) | Audit Log (hash-chained, encrypted, redaction, per-host opt-in) |
 | 14 | ✅ Complete (2026-06-13) | Polish (toast notifications, encrypted export/import) |
 
-Remaining for production release: CI/CD setup, code signing certificates, cross-platform testing, and packaging.
+Remaining for production release: biometric key wrapping, team sharing cryptography, plugin host API/WASI support, CI/CD setup, code signing certificates, cross-platform testing, and packaging.
 
 ---
 
@@ -109,10 +109,10 @@ Remaining for production release: CI/CD setup, code signing certificates, cross-
 - **Key Derivation:** Argon2id (memory-hard, OWASP params)
 - **Memory Safety:** Zeroize sensitive data after use
 - **Master Password:** length-first policy (NIST SP 800-63B), no recovery
-- **Biometric Unlock:** Touch ID, Face ID, Windows Hello, Android BiometricPrompt
+- **Biometric Unlock:** Deferred until OS-protected key wrapping is implemented
 - **No Telemetry:** All data stays local; sync uses user's own cloud
 - **SSH Host Verification:** TOFU + warning on key mismatch (Phase 6)
-- **Plugin Sandbox:** Wasmtime with capability-based permissions
+- **Plugin Sandbox:** Wasmtime for no-import modules; execution requires all requested capabilities to be granted
 
 ---
 
@@ -129,7 +129,7 @@ Remaining for production release: CI/CD setup, code signing certificates, cross-
 | Encryption | AES-256-GCM + Argon2id + HKDF |
 | Sync | HTTP + S3 backends (AWS Sig V4) |
 | Plugin Runtime | Wasmtime v29 (WASM sandbox) |
-| Biometric | Windows Hello (KeyCredentialManager) |
+| Biometric | Deferred; Windows Hello probing only |
 | State | Zustand |
 
 ---

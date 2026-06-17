@@ -5,10 +5,12 @@ use std::time::Duration;
 
 const EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub struct PluginRuntime {
     engine: wasmtime::Engine,
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 impl PluginRuntime {
     pub fn new() -> AppResult<Self> {
         let mut config = wasmtime::Config::new();
@@ -23,7 +25,9 @@ impl PluginRuntime {
     pub fn execute(&self, wasm_path: &str) -> AppResult<String> {
         let path = Path::new(wasm_path);
         if !path.exists() {
-            return Err(AppError::NotFound(format!("WASM file not found: {wasm_path}")));
+            return Err(AppError::NotFound(format!(
+                "WASM file not found: {wasm_path}"
+            )));
         }
 
         let wasi = wasmtime_wasi::WasiCtxBuilder::new().build();
@@ -38,6 +42,11 @@ impl PluginRuntime {
 
         let module = wasmtime::Module::from_file(&self.engine, path)
             .map_err(|e| AppError::Internal(format!("WASM load: {e}")))?;
+        if module.imports().next().is_some() {
+            return Err(AppError::InvalidInput(
+                "plugins with WASI/imported host functions are not supported yet".into(),
+            ));
+        }
 
         let instance = match wasmtime::Instance::new(&mut store, &module, &[]) {
             Ok(i) => i,
@@ -52,7 +61,9 @@ impl PluginRuntime {
         } else if let Some(run) = instance.get_func(&mut store, "run") {
             run.call(&mut store, &[], &mut [])
         } else {
-            return Err(AppError::InvalidInput("plugin has no '_start' or 'run' function".into()));
+            return Err(AppError::InvalidInput(
+                "plugin has no '_start' or 'run' function".into(),
+            ));
         };
 
         match result {
@@ -63,7 +74,9 @@ impl PluginRuntime {
             Err(e) => {
                 if e.is::<wasmtime::Trap>() {
                     warn!("Plugin trapped: {e}");
-                    return Err(AppError::InvalidInput(format!("plugin sandbox violation: {e}")));
+                    return Err(AppError::InvalidInput(format!(
+                        "plugin sandbox violation: {e}"
+                    )));
                 }
                 warn!("Plugin execution error: {e}");
                 Err(AppError::Internal(format!("plugin runtime: {e}")))
@@ -73,8 +86,35 @@ impl PluginRuntime {
 
     pub fn validate(&self, wasm_path: &str) -> AppResult<()> {
         let path = Path::new(wasm_path);
-        wasmtime::Module::from_file(&self.engine, path)
+        let module = wasmtime::Module::from_file(&self.engine, path)
             .map_err(|e| AppError::InvalidInput(format!("invalid WASM: {e}")))?;
+        if module.imports().next().is_some() {
+            return Err(AppError::InvalidInput(
+                "plugins with WASI/imported host functions are not supported yet".into(),
+            ));
+        }
         Ok(())
+    }
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub struct PluginRuntime;
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+impl PluginRuntime {
+    pub fn new() -> AppResult<Self> {
+        Ok(Self)
+    }
+
+    pub fn execute(&self, _wasm_path: &str) -> AppResult<String> {
+        Err(AppError::Internal(
+            "Plugin execution is not supported on mobile".into(),
+        ))
+    }
+
+    pub fn validate(&self, _wasm_path: &str) -> AppResult<()> {
+        Err(AppError::Internal(
+            "Plugin validation is not supported on mobile".into(),
+        ))
     }
 }

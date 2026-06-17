@@ -63,7 +63,8 @@ pub async fn sftp_open(
     input: SftpOpenInput,
 ) -> AppResult<String> {
     let mgr = Arc::clone(&state.sftp);
-    mgr.open_sftp(app, Arc::clone(&state.known_hosts), input.session_id).await
+    mgr.open_sftp(app, Arc::clone(&state.known_hosts), input.session_id)
+        .await
 }
 
 #[tauri::command]
@@ -82,8 +83,13 @@ pub async fn sftp_upload(
     input: SftpUploadInput,
 ) -> AppResult<()> {
     let mgr = Arc::clone(&state.sftp);
-    mgr.upload_file(app, &input.sftp_id, PathBuf::from(input.local_path), input.remote_path)
-        .await
+    mgr.upload_file(
+        app,
+        &input.sftp_id,
+        PathBuf::from(input.local_path),
+        input.remote_path,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -93,43 +99,36 @@ pub async fn sftp_download(
     input: SftpDownloadInput,
 ) -> AppResult<()> {
     let mgr = Arc::clone(&state.sftp);
-    mgr.download_file(app, &input.sftp_id, input.remote_path, PathBuf::from(input.local_path))
-        .await
+    mgr.download_file(
+        app,
+        &input.sftp_id,
+        input.remote_path,
+        PathBuf::from(input.local_path),
+    )
+    .await
 }
 
 #[tauri::command]
-pub async fn sftp_rename(
-    state: State<'_, AppState>,
-    input: SftpRenameInput,
-) -> AppResult<()> {
+pub async fn sftp_rename(state: State<'_, AppState>, input: SftpRenameInput) -> AppResult<()> {
     let mgr = Arc::clone(&state.sftp);
     mgr.rename(&input.sftp_id, input.old_path, input.new_path)
         .await
 }
 
 #[tauri::command]
-pub async fn sftp_remove(
-    state: State<'_, AppState>,
-    input: SftpPathInput,
-) -> AppResult<()> {
+pub async fn sftp_remove(state: State<'_, AppState>, input: SftpPathInput) -> AppResult<()> {
     let mgr = Arc::clone(&state.sftp);
     mgr.remove(&input.sftp_id, input.path).await
 }
 
 #[tauri::command]
-pub async fn sftp_mkdir(
-    state: State<'_, AppState>,
-    input: SftpPathInput,
-) -> AppResult<()> {
+pub async fn sftp_mkdir(state: State<'_, AppState>, input: SftpPathInput) -> AppResult<()> {
     let mgr = Arc::clone(&state.sftp);
     mgr.mkdir(&input.sftp_id, input.path).await
 }
 
 #[tauri::command]
-pub async fn sftp_close(
-    state: State<'_, AppState>,
-    input: SftpCloseInput,
-) -> AppResult<()> {
+pub async fn sftp_close(state: State<'_, AppState>, input: SftpCloseInput) -> AppResult<()> {
     let mgr = Arc::clone(&state.sftp);
     mgr.close(&input.sftp_id)
 }

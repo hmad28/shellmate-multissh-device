@@ -200,7 +200,8 @@ impl AuditLog {
         }
 
         let mut stmt = conn.prepare(&sql)?;
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
         let rows = stmt.query_map(param_refs.as_slice(), |row| {
             let ct: Vec<u8> = row.get(3)?;
             let nonce: Vec<u8> = row.get(4)?;
@@ -256,8 +257,8 @@ impl AuditLog {
         let events = Self::query(conn, vault, filter)?;
         let mut lines = Vec::with_capacity(events.len());
         for event in &events {
-            let line = serde_json::to_string(event)
-                .map_err(|e| AppError::Internal(e.to_string()))?;
+            let line =
+                serde_json::to_string(event).map_err(|e| AppError::Internal(e.to_string()))?;
             lines.push(line);
         }
         Ok(lines.join("\n"))
@@ -286,8 +287,7 @@ impl AuditLog {
         }
 
         // Also purge global events (host_id IS NULL) older than 365 days.
-        let global_cutoff =
-            (chrono::Utc::now() - chrono::Duration::days(365)).to_rfc3339();
+        let global_cutoff = (chrono::Utc::now() - chrono::Duration::days(365)).to_rfc3339();
         let deleted = conn.execute(
             "DELETE FROM audit_events WHERE host_id IS NULL AND created_at < ?1",
             [global_cutoff],

@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Author:** Matt
 **Last Updated:** 2026-06-10
-**Status:** In development (Phase 1-2 complete, scope expanded to full v1.0 production)
+**Status:** In development (core SSH/vault workflows implemented; production-track features remain partial)
 
 ---
 
@@ -28,7 +28,7 @@ ShellMate hadir sebagai SSH client yang **modern, lengkap, dan sepenuhnya lokal*
 
 4. **Local-First & Privacy by Default** — Tidak ada server ShellMate yang terlibat. Semua state di device user. Telemetry zero. Vault terenkripsi dengan Argon2id + AES-256-GCM. Full-DB encryption via SQLCipher.
 
-5. **Extensible** — Plugin system untuk fitur custom. Custom themes. Mosh support sebagai tambahan SSH.
+5. **Extensible** — Plugin system untuk fitur custom dan custom themes. Mosh support dievaluasi ulang untuk post-v1.0.
 
 **Tujuan Sekunder:**
 
@@ -67,7 +67,7 @@ ShellMate v1.0 adalah **production release** — bukan MVP. Scope dibagi per are
 - Terminal tab broadcast mode — kirim input yang sama ke beberapa tab
 - SSH keepalive + auto-reconnect dengan exponential backoff
 - Known hosts management dengan TOFU + warning untuk key mismatch
-- **Mosh support** — fallback protocol untuk koneksi tidak stabil
+- **Mosh support** — deferred post-v1.0
 
 #### 2.1.2 Host & Organization
 - Host CRUD (add, edit, delete, validate)
@@ -84,7 +84,7 @@ ShellMate v1.0 adalah **production release** — bukan MVP. Scope dibagi per are
 - Auto-lock after idle (configurable)
 - Manual lock (Ctrl+L)
 - Master password change with re-encryption
-- **Biometric unlock**: Face ID, Touch ID, Windows Hello, Android Fingerprint
+- **Biometric unlock**: deferred until OS-protected key wrapping is implemented correctly
 - Memory zeroize (Rust `zeroize`)
 
 #### 2.1.4 Productivity
@@ -120,15 +120,15 @@ ShellMate v1.0 adalah **production release** — bukan MVP. Scope dibagi per are
 
 #### 2.1.9 Team & Sharing
 - **Team vault** — share host config terenkripsi via team key
-- Member management (add member with public key, revoke, key rotation)
-- Per-host share permissions (read-only / edit)
+- Member management (add member with public key, revoke, key rotation) — deferred until public-key wrapping is implemented
+- Per-host share permissions (read-only / edit) — deferred until team sharing cryptography is implemented
 - Conflict resolution untuk shared host changes
 
 #### 2.1.10 Plugin System
 - Extension API: registered hooks pre/post connect, terminal data filter, custom UI panels
 - WASM-based plugin runtime (sandboxed, no native code execution)
-- Plugin permissions model (network, filesystem, secrets — semua opt-in)
-- Plugin distribution: load from file, plugin manifest with signature
+- Plugin permissions model (network, filesystem, secrets — semua opt-in before execution)
+- Plugin distribution: load from file; manifest signing deferred until verification is implemented
 
 #### 2.1.11 Audit & Observability
 - **Audit log** — session start/end, file transfer events, command history (opt-in per host)
@@ -175,13 +175,13 @@ ShellMate v1.0 adalah **production release** — bukan MVP. Scope dibagi per are
 | Mobile UI Adaptation | **Responsive React + Tauri mobile APIs** | Touch handlers, extended key bar, bottom-sheet navigation |
 | Terminal Emulator | **xterm.js** | Industry standard, feature-rich, search & WebGL addon |
 | SSH Backend | **Rust (`russh` crate)** | Native performance, credentials tidak keluar dari Rust layer |
-| Mosh Client | **Rust (custom mosh-client port atau wrapper)** | UDP SSP transport, fallback dari SSH |
+| Mosh Client | Deferred post-v1.0 | UDP SSP transport requires a separate security and reliability pass |
 | Local Storage | **SQLite via `rusqlite` + SQLCipher** | Full-DB encryption, single file |
 | Per-credential Encryption | **AES-256-GCM** (defense in depth on top of SQLCipher) | Belt-and-suspenders untuk credential data |
 | Key Derivation | **Argon2id** (memory-hard) | OWASP recommended |
 | Sync Layer | **Custom encrypt-then-upload** dengan adapter per backend (iCloud, GDrive, S3, WebDAV) | E2E encryption, no ShellMate server |
 | Plugin Runtime | **Wasmtime** (WASM, sandboxed) | Safe extension execution, capability-based permissions |
-| Biometric | **OS-native APIs** via Tauri plugins (Touch ID, Face ID, Windows Hello, Android BiometricPrompt) | Native UX |
+| Biometric | Deferred | Must use OS-protected key wrapping before re-enabling |
 | State Management | **Zustand** | Simpel, ringan |
 | Package Manager | **npm** (frontend), **Cargo** (backend) | Cross-platform Windows compatibility |
 
@@ -732,7 +732,7 @@ ShellMate v1.0 dikerjakan **scope-driven** (no fixed timeline). Tiap milestone s
 | # | Topik | Keputusan | Alasan |
 |---|-------|-----------|--------|
 | 1 | Nama final | **ShellMate** | Distinctive, sudah dipakai konsisten di docs |
-| 2 | Mosh support | **In v1.0** (Phase 6) | User-driven scope expansion. Akan ditambahkan sebagai protocol fallback. |
+| 2 | Mosh support | **Post-v1.0** | UDP transport deserves separate testing and hardening. |
 | 3 | SFTP scope | **In v1.0** (Phase 5) | Core productivity feature |
 | 4 | License | **MIT** | Permissive, kompatibel dengan tujuan open-source self-hostable |
 | 5 | Auto-updater | **In v1.0** (Phase 14) | Production app butuh delivery channel. Tauri v2 updater dengan signing. |
@@ -747,7 +747,7 @@ ShellMate v1.0 dikerjakan **scope-driven** (no fixed timeline). Tiap milestone s
 | 14 | Team / sharing vault | **In v1.0** (Phase 11) | Differentiator vs Termius (yang paywall team feature). |
 | 15 | Audit log | **In v1.0** (Phase 13), opt-in per host | Privacy default off, useful for compliance / DevOps. |
 | 16 | Custom themes | **In v1.0** (Phase 4) | UX expectation untuk modern terminal app. |
-| 17 | Biometric unlock | **In v1.0** (Phase 8) — desktop + mobile | UX critical untuk frequent unlock. Tauri plugin per OS. |
+| 17 | Biometric unlock | **Deferred** until OS-protected key wrapping is implemented | Avoid app-readable wrapping secrets and false security claims. |
 | 18 | Mobile mode terminal protocol | **SSH first, Mosh as enhancement** | Mosh sangat valuable di mobile (network changes), tapi SSH dulu. |
 | 19 | Sync conflict strategy | **Last-write-wins + manual merge UI** untuk konflik kompleks | Sederhana untuk umum, fleksibel untuk power user. |
 | 20 | Versioning approach | **Scope-driven, no fixed timeline** | Phase ship saat acceptance terpenuhi. Quality > deadline. |

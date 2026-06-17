@@ -51,13 +51,17 @@ impl Clone for VipKeyPair {
 
 fn get_authorized_keys_path() -> AppResult<PathBuf> {
     if cfg!(target_os = "windows") {
-        let home = dirs::home_dir().ok_or_else(|| AppError::Internal("cannot determine home directory".into()))?;
+        let home = dirs::home_dir()
+            .ok_or_else(|| AppError::Internal("cannot determine home directory".into()))?;
         Ok(home.join(".ssh").join("authorized_keys"))
     } else if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
-        let home = dirs::home_dir().ok_or_else(|| AppError::Internal("cannot determine home directory".into()))?;
+        let home = dirs::home_dir()
+            .ok_or_else(|| AppError::Internal("cannot determine home directory".into()))?;
         Ok(home.join(".ssh").join("authorized_keys"))
     } else {
-        Err(AppError::Internal("VIP access not supported on this platform".into()))
+        Err(AppError::Internal(
+            "VIP access not supported on this platform".into(),
+        ))
     }
 }
 
@@ -167,23 +171,33 @@ Set-Acl $path $acl
             let _ = std::fs::remove_file(&temp_file_path);
 
             match status {
-                Ok(s) if s.success() => Ok("Admin key injected and permissions configured successfully".to_string()),
-                Ok(_) => Err(AppError::Internal("Failed to elevate and inject admin key. User might have cancelled UAC prompt.".into())),
-                Err(e) => Err(AppError::Internal(format!("Failed to run elevated key injection script: {e}"))),
+                Ok(s) if s.success() => {
+                    Ok("Admin key injected and permissions configured successfully".to_string())
+                }
+                Ok(_) => Err(AppError::Internal(
+                    "Failed to elevate and inject admin key. User might have cancelled UAC prompt."
+                        .into(),
+                )),
+                Err(e) => Err(AppError::Internal(format!(
+                    "Failed to run elevated key injection script: {e}"
+                ))),
             }
         } else if cfg!(target_os = "macos") {
             let script = format!(
                 "do shell script \"mkdir -p /var/root/.ssh && touch /var/root/.ssh/authorized_keys && (grep -q '{}' /var/root/.ssh/authorized_keys || echo '{}' >> /var/root/.ssh/authorized_keys) && chmod 700 /var/root/.ssh && chmod 600 /var/root/.ssh/authorized_keys\" with administrator privileges",
                 public_key_line, public_key_line
             );
-            let status = Command::new("osascript")
-                .arg("-e")
-                .arg(&script)
-                .status();
+            let status = Command::new("osascript").arg("-e").arg(&script).status();
             match status {
-                Ok(s) if s.success() => Ok("Admin key injected to /var/root/.ssh/authorized_keys successfully".to_string()),
-                Ok(_) => Err(AppError::Internal("Failed to inject root key via osascript. Permission denied.".into())),
-                Err(e) => Err(AppError::Internal(format!("Failed to run osascript for root key injection: {e}"))),
+                Ok(s) if s.success() => Ok(
+                    "Admin key injected to /var/root/.ssh/authorized_keys successfully".to_string(),
+                ),
+                Ok(_) => Err(AppError::Internal(
+                    "Failed to inject root key via osascript. Permission denied.".into(),
+                )),
+                Err(e) => Err(AppError::Internal(format!(
+                    "Failed to run osascript for root key injection: {e}"
+                ))),
             }
         } else {
             // Linux
@@ -197,9 +211,15 @@ Set-Acl $path $acl
                 .arg(&cmd)
                 .status();
             match status {
-                Ok(s) if s.success() => Ok("Admin key injected to /root/.ssh/authorized_keys successfully".to_string()),
-                Ok(_) => Err(AppError::Internal("Failed to inject root key via pkexec. Permission denied.".into())),
-                Err(e) => Err(AppError::Internal(format!("Failed to run pkexec for root key injection: {e}"))),
+                Ok(s) if s.success() => {
+                    Ok("Admin key injected to /root/.ssh/authorized_keys successfully".to_string())
+                }
+                Ok(_) => Err(AppError::Internal(
+                    "Failed to inject root key via pkexec. Permission denied.".into(),
+                )),
+                Err(e) => Err(AppError::Internal(format!(
+                    "Failed to run pkexec for root key injection: {e}"
+                ))),
             }
         }
     } else {
@@ -300,9 +320,7 @@ pub async fn vip_create_localhost_host(
 }
 
 #[tauri::command]
-pub async fn vip_get_key_status(
-    app_state: State<'_, AppState>,
-) -> AppResult<serde_json::Value> {
+pub async fn vip_get_key_status(app_state: State<'_, AppState>) -> AppResult<serde_json::Value> {
     let conn = app_state.db.lock();
 
     // Check if VIP host exists

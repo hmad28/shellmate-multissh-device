@@ -47,10 +47,7 @@ pub async fn recording_start(
 
 /// Stop recording a session.
 #[tauri::command]
-pub async fn recording_stop(
-    state: State<'_, AppState>,
-    recording_id: String,
-) -> AppResult<()> {
+pub async fn recording_stop(state: State<'_, AppState>, recording_id: String) -> AppResult<()> {
     let now = chrono::Utc::now().to_rfc3339();
     let conn = state.db.lock();
 
@@ -147,12 +144,15 @@ pub async fn recording_events(
 
 /// Delete a recording and its events.
 #[tauri::command]
-pub async fn recording_delete(
-    state: State<'_, AppState>,
-    recording_id: String,
-) -> AppResult<()> {
+pub async fn recording_delete(state: State<'_, AppState>, recording_id: String) -> AppResult<()> {
     let conn = state.db.lock();
-    conn.execute("DELETE FROM session_events WHERE recording_id = ?1", [&recording_id])?;
-    conn.execute("DELETE FROM session_recordings WHERE id = ?1", [&recording_id])?;
+    conn.execute(
+        "DELETE FROM session_events WHERE recording_id = ?1",
+        [&recording_id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_recordings WHERE id = ?1",
+        [&recording_id],
+    )?;
     Ok(())
 }

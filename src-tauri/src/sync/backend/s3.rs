@@ -1,9 +1,9 @@
+use super::SyncBackend;
 use crate::errors::{AppError, AppResult};
 use async_trait::async_trait;
-use super::SyncBackend;
-use sha2::{Sha256, Digest};
-use hmac::{Hmac, Mac};
 use chrono::Utc;
+use hmac::{Hmac, Mac};
+use sha2::{Digest, Sha256};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -64,7 +64,10 @@ impl S3Backend {
     }
 
     fn list_url(&self) -> String {
-        format!("{}/{}?list-type=2&prefix={}", self.endpoint, self.bucket, self.prefix)
+        format!(
+            "{}/{}?list-type=2&prefix={}",
+            self.endpoint, self.bucket, self.prefix
+        )
     }
 
     /// Sign an S3 request using AWS Signature V4.
@@ -80,14 +83,17 @@ impl S3Backend {
         let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
 
         // Parse URL to get host and path.
-        let parsed = reqwest::Url::parse(url)
-            .map_err(|e| AppError::Internal(format!("URL parse: {e}")))?;
+        let parsed =
+            reqwest::Url::parse(url).map_err(|e| AppError::Internal(format!("URL parse: {e}")))?;
         let host = parsed.host_str().unwrap_or("");
         let path = parsed.path();
         let query = parsed.query().unwrap_or("");
 
         headers.push(("x-amz-date".into(), amz_date.clone()));
-        headers.push(("x-amz-content-sha256".into(), hex::encode(Sha256::digest(body))));
+        headers.push((
+            "x-amz-content-sha256".into(),
+            hex::encode(Sha256::digest(body)),
+        ));
         headers.push(("host".into(), host.to_string()));
 
         // Canonical request.
@@ -146,9 +152,7 @@ impl SyncBackend for S3Backend {
     async fn put(&self, object_id: &str, data: &[u8]) -> AppResult<()> {
         let key = format!("{}{}", self.prefix, object_id);
         let url = self.object_url(&key);
-        let mut headers = vec![
-            ("content-type".into(), "application/octet-stream".into()),
-        ];
+        let mut headers = vec![("content-type".into(), "application/octet-stream".into())];
         self.sign_request("PUT", &url, &mut headers, data)?;
 
         let client = reqwest::Client::new();
@@ -156,7 +160,10 @@ impl SyncBackend for S3Backend {
         for (k, v) in &headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        let resp = req.send().await.map_err(|e| AppError::Internal(format!("S3 PUT: {e}")))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("S3 PUT: {e}")))?;
         if !resp.status().is_success() {
             return Err(AppError::Internal(format!("S3 PUT: {}", resp.status())));
         }
@@ -174,7 +181,10 @@ impl SyncBackend for S3Backend {
         for (k, v) in &headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        let resp = req.send().await.map_err(|e| AppError::Internal(format!("S3 GET: {e}")))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("S3 GET: {e}")))?;
         if !resp.status().is_success() {
             return Err(AppError::Internal(format!("S3 GET: {}", resp.status())));
         }
@@ -194,12 +204,18 @@ impl SyncBackend for S3Backend {
         for (k, v) in &headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        let resp = req.send().await.map_err(|e| AppError::Internal(format!("S3 LIST: {e}")))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("S3 LIST: {e}")))?;
         if !resp.status().is_success() {
             return Err(AppError::Internal(format!("S3 LIST: {}", resp.status())));
         }
 
-        let body = resp.text().await.map_err(|e| AppError::Internal(format!("S3 LIST body: {e}")))?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| AppError::Internal(format!("S3 LIST body: {e}")))?;
 
         // Parse ListBucketResult XML to extract object keys.
         // Simple regex-free parsing: look for <Key> tags.
@@ -232,7 +248,10 @@ impl SyncBackend for S3Backend {
         for (k, v) in &headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        let resp = req.send().await.map_err(|e| AppError::Internal(format!("S3 DELETE: {e}")))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("S3 DELETE: {e}")))?;
         if !resp.status().is_success() {
             return Err(AppError::Internal(format!("S3 DELETE: {}", resp.status())));
         }

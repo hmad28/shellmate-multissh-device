@@ -313,4 +313,21 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     CREATE INDEX IF NOT EXISTS idx_ssh_keys_name ON ssh_keys(name);
     "#,
     ),
+    (
+        "012_paired_devices",
+        r#"
+    CREATE TABLE IF NOT EXISTS paired_devices (
+        id TEXT PRIMARY KEY,
+        device_name TEXT NOT NULL,
+        token_hash TEXT NOT NULL,
+        bound_ip TEXT NOT NULL,
+        revoked_at TEXT,
+        paired_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_paired_devices_token_hash ON paired_devices(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_paired_devices_revoked ON paired_devices(revoked_at);
+    "#,
+    ),
 ];

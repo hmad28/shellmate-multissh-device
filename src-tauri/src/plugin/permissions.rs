@@ -2,11 +2,7 @@ use crate::errors::{AppError, AppResult};
 use rusqlite::Connection;
 
 /// Check if a plugin has a specific capability granted.
-pub fn has_capability(
-    conn: &Connection,
-    plugin_id: &str,
-    capability: &str,
-) -> AppResult<bool> {
+pub fn has_capability(conn: &Connection, plugin_id: &str, capability: &str) -> AppResult<bool> {
     let granted: bool = conn
         .query_row(
             "SELECT granted FROM plugin_capabilities
@@ -33,11 +29,7 @@ pub fn is_enabled(conn: &Connection, plugin_id: &str) -> AppResult<bool> {
 }
 
 /// Gate a plugin action: checks enabled + capability.
-pub fn check_permission(
-    conn: &Connection,
-    plugin_id: &str,
-    capability: &str,
-) -> AppResult<()> {
+pub fn check_permission(conn: &Connection, plugin_id: &str, capability: &str) -> AppResult<()> {
     if !is_enabled(conn, plugin_id)? {
         return Err(AppError::InvalidInput(format!(
             "plugin {plugin_id} is disabled"

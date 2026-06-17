@@ -8,7 +8,14 @@
       "Bash(git push *)",
       "Bash(findstr /v \"^.agent ^.agents ^.claude ^.commandcode ^.kiro ^_bmad ^.opencode\")",
       "Bash(Select-String -NotMatch \"^\\\\.agent|^\\\\.agents|^\\\\.claude|^\\\\.commandcode|^\\\\.kiro|^_bmad|^\\\\.opencode\")",
-      "PowerShell(git ls-files --others --exclude-standard | Where-Object { $_ -notmatch '^\\(\\\\.agent|\\\\.agents|\\\\.claude|\\\\.commandcode|\\\\.kiro|_bmad|\\\\.opencode\\)' })"
+      "PowerShell(git ls-files --others --exclude-standard | Where-Object { $_ -notmatch '^\\(\\\\.agent|\\\\.agents|\\\\.claude|\\\\.commandcode|\\\\.kiro|_bmad|\\\\.opencode\\)' })",
+      "Bash(git status *)",
+      "Bash(Select-String -NotMatch \"node_modules|target/|dist/\")",
+      "Bash(Select-Object -First 80)",
+      "PowerShell(git add *)",
+      "Bash(Select-Object -First 30)",
+      "Bash(Test-Path LICENSE)",
+      "Bash(Test-Path CHANGELOG.md)"
     ]
   }
 }

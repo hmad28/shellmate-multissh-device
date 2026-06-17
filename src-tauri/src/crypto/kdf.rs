@@ -67,8 +67,10 @@ pub fn derive_vault_and_db_keys(master_key: &[u8; KEY_LEN]) -> ([u8; KEY_LEN], [
     let hk = Hkdf::<Sha256>::new(Some(b"shellmate-v1"), master_key);
     let mut vault_key = [0u8; KEY_LEN];
     let mut db_key = [0u8; KEY_LEN];
-    hk.expand(b"vault-key", &mut vault_key).expect("HKDF expand failed");
-    hk.expand(b"db-key", &mut db_key).expect("HKDF expand failed");
+    hk.expand(b"vault-key", &mut vault_key)
+        .expect("HKDF expand failed");
+    hk.expand(b"db-key", &mut db_key)
+        .expect("HKDF expand failed");
     (vault_key, db_key)
 }
 

@@ -26,10 +26,7 @@ pub struct AddHistoryInput {
 }
 
 #[tauri::command]
-pub async fn history_add(
-    state: State<'_, AppState>,
-    input: AddHistoryInput,
-) -> AppResult<String> {
+pub async fn history_add(state: State<'_, AppState>, input: AddHistoryInput) -> AppResult<String> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
     let conn = state.db.lock();
@@ -99,7 +96,10 @@ pub async fn history_search(
     if q.is_empty() {
         return history_list(state, None, limit).await;
     }
-    let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let escaped = q
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
     let pattern = format!("%{}%", escaped.to_lowercase());
     let limit = limit.unwrap_or(50).min(500);
 

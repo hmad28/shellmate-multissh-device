@@ -65,10 +65,7 @@ pub async fn get_snippets(state: State<'_, AppState>) -> AppResult<Vec<Snippet>>
 }
 
 #[tauri::command]
-pub async fn create_snippet(
-    state: State<'_, AppState>,
-    input: SnippetInput,
-) -> AppResult<Snippet> {
+pub async fn create_snippet(state: State<'_, AppState>, input: SnippetInput) -> AppResult<Snippet> {
     validate(&input)?;
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();

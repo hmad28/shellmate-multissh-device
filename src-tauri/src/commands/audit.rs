@@ -10,8 +10,9 @@ pub async fn audit_record(
     host_id: Option<String>,
     payload: String,
 ) -> AppResult<String> {
-    let etype = AuditEventType::from_str(&event_type)
-        .ok_or_else(|| crate::errors::AppError::InvalidInput(format!("unknown event type: {event_type}")))?;
+    let etype = AuditEventType::from_str(&event_type).ok_or_else(|| {
+        crate::errors::AppError::InvalidInput(format!("unknown event type: {event_type}"))
+    })?;
     let conn = state.db.lock();
     AuditLog::record(&conn, &state.vault, etype, host_id.as_deref(), &payload)
 }
@@ -26,10 +27,7 @@ pub async fn audit_query(
 }
 
 #[tauri::command]
-pub async fn audit_export(
-    state: State<'_, AppState>,
-    filter: AuditQuery,
-) -> AppResult<String> {
+pub async fn audit_export(state: State<'_, AppState>, filter: AuditQuery) -> AppResult<String> {
     let conn = state.db.lock();
     AuditLog::export_jsonl(&conn, &state.vault, &filter)
 }

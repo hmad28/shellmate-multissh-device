@@ -14,7 +14,7 @@ pub struct GitInfo {
 pub async fn git_get_info(path: Option<String>) -> GitInfo {
     let dir = path.as_deref().unwrap_or(".");
     let branch = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], dir).await;
-    
+
     if branch.is_none() {
         return GitInfo {
             branch: None,
@@ -24,11 +24,17 @@ pub async fn git_get_info(path: Option<String>) -> GitInfo {
         };
     }
 
-    let has_changes = run_git(&["status", "--porcelain"], dir).await
+    let has_changes = run_git(&["status", "--porcelain"], dir)
+        .await
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
 
-    let (ahead, behind) = match run_git(&["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], dir).await {
+    let (ahead, behind) = match run_git(
+        &["rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
+        dir,
+    )
+    .await
+    {
         Some(output) => {
             let parts: Vec<&str> = output.trim().split('\t').collect();
             (

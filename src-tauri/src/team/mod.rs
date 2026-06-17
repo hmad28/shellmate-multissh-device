@@ -1,12 +1,8 @@
 use crate::errors::{AppError, AppResult};
 use crate::vault::Vault;
-use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
-use aes_gcm::aead::Aead;
-use hkdf::Hkdf;
 use rand::RngCore;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use zeroize::Zeroize;
 
 const TEAM_KEY_LEN: usize = 32;
@@ -108,9 +104,7 @@ impl TeamManager {
 
     /// List all teams.
     pub fn list_teams(conn: &Connection) -> AppResult<Vec<Team>> {
-        let mut stmt = conn.prepare(
-            "SELECT id, name, created_at FROM team ORDER BY name",
-        )?;
+        let mut stmt = conn.prepare("SELECT id, name, created_at FROM team ORDER BY name")?;
         let rows = stmt.query_map([], |row| {
             Ok(Team {
                 id: row.get(0)?,
@@ -127,94 +121,19 @@ impl TeamManager {
         Ok(())
     }
 
-    /// Add a member to a team. Wraps the team master key with a per-member
-    /// secret. The wrapping key is derived from a random secret stored alongside
-    /// the member record, NOT from the public key string (which is not secret).
+    /// Add a member to a team.
+    ///
+    /// Disabled until the team key can be wrapped with the member's public key
+    /// and revoked through key rotation.
     pub fn add_member(
         conn: &Connection,
         vault: &Vault,
         input: &AddMemberInput,
     ) -> AppResult<TeamMember> {
-        if !vault.is_unlocked() {
-            return Err(AppError::InvalidInput("vault is locked".into()));
-        }
-
-        // Get the team master key (encrypted).
-        let (wrapped_key, key_nonce): (Vec<u8>, Vec<u8>) = conn.query_row(
-            "SELECT team_master_key_wrapped, team_master_key_nonce FROM team WHERE id = ?1",
-            [&input.team_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
-
-        // Decrypt the team master key with vault key.
-        let nonce_arr = nonce_from_vec(&key_nonce)?;
-        let blob = crate::crypto::EncryptedBlob {
-            ciphertext: wrapped_key,
-            nonce: nonce_arr,
-        };
-        let team_key = vault.decrypt(&blob)?;
-
-        // Generate a random per-member wrapping secret.
-        // This secret is stored encrypted with the vault key alongside the member record.
-        // The wrapping key is derived from this secret via HKDF, NOT from the public key.
-        let mut member_secret = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut member_secret);
-
-        let wrap_key = derive_member_wrap_key(&member_secret);
-        let cipher = Aes256Gcm::new_from_slice(&wrap_key)
-            .map_err(|e| AppError::Internal(format!("AES init: {e}")))?;
-
-        let mut member_nonce = [0u8; 12];
-        rand::thread_rng().fill_bytes(&mut member_nonce);
-        let nonce = Nonce::from_slice(&member_nonce);
-
-        let wrapped_team_key = cipher
-            .encrypt(nonce, team_key.as_ref())
-            .map_err(|e| AppError::Internal(format!("encrypt: {e}")))?;
-
-        // Combine nonce + ciphertext for storage.
-        let mut wrapped_with_nonce = Vec::with_capacity(12 + wrapped_team_key.len());
-        wrapped_with_nonce.extend_from_slice(&member_nonce);
-        wrapped_with_nonce.extend_from_slice(&wrapped_team_key);
-
-        // Encrypt the member secret with vault key for storage.
-        let encrypted_secret = vault.encrypt(&member_secret)?;
-
-        let member_id = uuid::Uuid::new_v4().to_string();
-        let now = chrono::Utc::now().to_rfc3339();
-
-        conn.execute(
-            "INSERT INTO team_members (id, team_id, member_pubkey, member_label, wrapped_team_key, added_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![
-                member_id,
-                input.team_id,
-                input.member_pubkey,
-                input.member_label,
-                wrapped_with_nonce,
-                now,
-            ],
-        )?;
-
-        // Store the encrypted member secret in a separate table.
-        conn.execute(
-            "INSERT INTO team_member_secrets (member_id, encrypted_secret, secret_nonce)
-             VALUES (?1, ?2, ?3)",
-            rusqlite::params![
-                member_id,
-                encrypted_secret.ciphertext,
-                encrypted_secret.nonce.to_vec(),
-            ],
-        )?;
-
-        Ok(TeamMember {
-            id: member_id,
-            team_id: input.team_id.clone(),
-            member_pubkey: input.member_pubkey.clone(),
-            member_label: input.member_label.clone(),
-            added_at: now,
-            revoked_at: None,
-        })
+        let _ = (conn, vault, input);
+        Err(AppError::InvalidInput(
+            "team member sharing is disabled until public-key wrapping and key rotation are implemented".into(),
+        ))
     }
 
     /// List members of a team.
@@ -247,50 +166,18 @@ impl TeamManager {
     }
 
     /// Share a host with a team.
+    ///
+    /// Disabled until encrypted team sharing semantics are complete.
     pub fn share_host(
         conn: &Connection,
         vault: &Vault,
         input: &ShareHostInput,
     ) -> AppResult<TeamShare> {
-        if !vault.is_unlocked() {
-            return Err(AppError::InvalidInput("vault is locked".into()));
-        }
-
-        if input.permission != "read" && input.permission != "edit" {
-            return Err(AppError::InvalidInput(
-                "permission must be 'read' or 'edit'".into(),
-            ));
-        }
-
-        // Verify host exists.
-        let host_exists: bool = conn.query_row(
-            "SELECT COUNT(*) FROM hosts WHERE id = ?1",
-            [&input.host_id],
-            |row| row.get::<_, i64>(0),
-        )? > 0;
-        if !host_exists {
-            return Err(AppError::NotFound("host not found".into()));
-        }
-
-        let share_id = uuid::Uuid::new_v4().to_string();
-        let now = chrono::Utc::now().to_rfc3339();
-
-        conn.execute(
-            "INSERT INTO team_shares (id, team_id, host_id, permission, shared_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT(team_id, host_id) DO UPDATE SET
-                permission = excluded.permission,
-                shared_at = excluded.shared_at",
-            rusqlite::params![share_id, input.team_id, input.host_id, input.permission, now],
-        )?;
-
-        Ok(TeamShare {
-            id: share_id,
-            team_id: input.team_id.clone(),
-            host_id: input.host_id.clone(),
-            permission: input.permission.clone(),
-            shared_at: now,
-        })
+        let _ = (conn, vault, input);
+        Err(AppError::InvalidInput(
+            "host sharing is disabled until team key wrapping and revocation are implemented"
+                .into(),
+        ))
     }
 
     /// List hosts shared with a team.
@@ -316,25 +203,4 @@ impl TeamManager {
         conn.execute("DELETE FROM team_shares WHERE id = ?1", [share_id])?;
         Ok(())
     }
-}
-
-/// Derive a wrapping key from a random per-member secret using HKDF.
-/// The secret is stored encrypted with the vault key, NOT derived from public key.
-fn derive_member_wrap_key(member_secret: &[u8]) -> [u8; 32] {
-    let hk = Hkdf::<Sha256>::new(Some(b"shellmate-team-member-v1"), member_secret);
-    let mut key = [0u8; 32];
-    hk.expand(b"team-key-wrap", &mut key).expect("HKDF expand failed");
-    key
-}
-
-fn nonce_from_vec(v: &[u8]) -> AppResult<[u8; 12]> {
-    if v.len() != 12 {
-        return Err(AppError::Internal(format!(
-            "expected 12-byte nonce, got {}",
-            v.len()
-        )));
-    }
-    let mut arr = [0u8; 12];
-    arr.copy_from_slice(v);
-    Ok(arr)
 }

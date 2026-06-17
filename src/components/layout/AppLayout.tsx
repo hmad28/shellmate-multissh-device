@@ -13,6 +13,7 @@ import { StatusBar } from './StatusBar';
 import { ContentArea } from './ContentArea';
 import { MobileLayout } from './MobileLayout';
 import { ToastContainer } from '@/components/ui/Toast';
+import { usePaneStore, getAllLeaves } from '@/stores/pane-store';
 
 interface PendingVerification {
   sessionId: string;
@@ -115,6 +116,8 @@ export function AppLayout() {
 
 function DesktopLayout() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const root = usePaneStore((s) => s.root);
+  const leafCount = getAllLeaves(root).length;
 
   // Ctrl+B to toggle sidebar
   useEffect(() => {
@@ -134,7 +137,7 @@ function DesktopLayout() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <TabBar />
+          {leafCount <= 1 && <TabBar />}
           <ContentArea />
         </div>
       </div>

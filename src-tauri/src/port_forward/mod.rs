@@ -81,14 +81,12 @@ impl PortForwardManager {
         };
 
         let addr = SocketAddr::from(([127, 0, 0, 1], local_port));
-        let listener = TcpListener::bind(addr)
-            .await
-            .map_err(|e| {
-                AppError::Internal(format!(
-                    "Failed to bind local port {}: {} (port may be in use)",
-                    local_port, e
-                ))
-            })?;
+        let listener = TcpListener::bind(addr).await.map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to bind local port {}: {} (port may be in use)",
+                local_port, e
+            ))
+        })?;
 
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         let enabled = Arc::new(tokio::sync::RwLock::new(true));
@@ -182,14 +180,18 @@ impl PortForwardManager {
             let active = forwards
                 .get_mut(forward_id)
                 .ok_or_else(|| AppError::NotFound(format!("forward {}", forward_id)))?;
-            
+
             active.rule.enabled = !active.rule.enabled;
-            (active.rule.enabled, active.enabled.clone(), active.rule.clone())
+            (
+                active.rule.enabled,
+                active.enabled.clone(),
+                active.rule.clone(),
+            )
         };
-        
+
         // Update the shared enabled flag so the spawned task respects it
         *enabled_arc.write().await = enabled_val;
-        
+
         Ok(rule)
     }
 

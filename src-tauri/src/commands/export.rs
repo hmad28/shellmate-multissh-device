@@ -85,10 +85,14 @@ pub async fn import_hosts_encrypted(
 
     // Parse header: magic (4) + version (1) + salt (16) + nonce (12) + ciphertext.
     if data.len() < 33 {
-        return Err(crate::errors::AppError::InvalidInput("data too short".into()));
+        return Err(crate::errors::AppError::InvalidInput(
+            "data too short".into(),
+        ));
     }
     if &data[..4] != b"SMEX" {
-        return Err(crate::errors::AppError::InvalidInput("invalid file format".into()));
+        return Err(crate::errors::AppError::InvalidInput(
+            "invalid file format".into(),
+        ));
     }
 
     let salt: [u8; 16] = data[5..21].try_into().unwrap();
@@ -100,8 +104,9 @@ pub async fn import_hosts_encrypted(
         ciphertext: ciphertext.to_vec(),
         nonce,
     };
-    let plaintext = crate::crypto::decrypt(&key, &blob)
-        .map_err(|_| crate::errors::AppError::InvalidInput("wrong password or corrupted data".into()))?;
+    let plaintext = crate::crypto::decrypt(&key, &blob).map_err(|_| {
+        crate::errors::AppError::InvalidInput("wrong password or corrupted data".into())
+    })?;
 
     let export: ExportFile = serde_json::from_slice(&plaintext)
         .map_err(|e| crate::errors::AppError::InvalidInput(format!("invalid export: {e}")))?;

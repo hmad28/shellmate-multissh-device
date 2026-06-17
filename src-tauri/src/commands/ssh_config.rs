@@ -145,7 +145,10 @@ Host db-server
 
         assert_eq!(hosts[1].label, "db-server");
         assert_eq!(hosts[1].auth_type, "key");
-        assert_eq!(hosts[1].identity_file, Some("~/.ssh/id_ed25519".to_string()));
+        assert_eq!(
+            hosts[1].identity_file,
+            Some("~/.ssh/id_ed25519".to_string())
+        );
     }
 
     #[test]

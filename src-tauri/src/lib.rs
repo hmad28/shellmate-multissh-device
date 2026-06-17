@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod audit;
+mod biometric;
 mod commands;
 mod crypto;
 mod db;
@@ -11,11 +13,9 @@ mod port_forward;
 mod sftp;
 mod ssh;
 mod state;
-mod vault;
-mod biometric;
 mod sync;
 mod team;
-mod audit;
+mod vault;
 use crate::commands::p2p_sync::SyncServerState;
 use crate::commands::vip_access::VipKeyStore;
 use crate::db::DbState;
@@ -29,9 +29,12 @@ use tauri::Manager;
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_shell::init());
+
+    #[cfg(not(windows))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -40,6 +43,12 @@ pub fn run() {
             let db_path = app_data_dir.join("shellmate.db");
 
             log::info!("Opening database at {}", db_path.display());
+
+            // Mobile dev builds currently use bundled SQLite instead of
+            // SQLCipher. A stale sidecar from an older build would make the app
+            // think the DB is encrypted and skip opening the real SQLite file.
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            db::remove_vault_meta(&db_path);
 
             // Check if vault metadata exists — if so, DB should be encrypted.
             // Self-heal: the on-disk DB may be in a broken state from older
@@ -66,7 +75,9 @@ pub fn run() {
                         db::remove_vault_meta(&db_path);
                     }
                     DbState::SqliteHeader | DbState::Empty => {
-                        log::info!("Vault metadata found — DB is encrypted. Deferring open until unlock.");
+                        log::info!(
+                            "Vault metadata found — DB is encrypted. Deferring open until unlock."
+                        );
                     }
                 }
             }
@@ -80,10 +91,45 @@ pub fn run() {
                 db::open(&db_path, None).expect("failed to initialize database")
             };
 
-            app.manage(AppState::new(conn, db_path));
+            let app_state = AppState::new(conn, db_path);
+            let p2p_auto_start = {
+                let conn = app_state.db.lock();
+                conn.query_row(
+                    "SELECT value FROM settings WHERE key = 'p2p.auto_start_server'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+                .map(|value| value == "true")
+                .unwrap_or(false)
+            };
+            let db_for_p2p = Arc::clone(&app_state.db);
+            let vault_for_p2p = Arc::clone(&app_state.vault);
+            let local_sessions_for_p2p = Arc::clone(&app_state.local_sessions);
+            let local_session_output_for_p2p = Arc::clone(&app_state.local_session_output);
+            let sync_server_state = Arc::new(SyncServerState::new());
+
+            app.manage(app_state);
             app.manage(Arc::new(VipKeyStore::new()));
-            app.manage(Arc::new(SyncServerState::new()));
+            app.manage(Arc::clone(&sync_server_state));
             commands::discovery::init(app);
+
+            if p2p_auto_start {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = commands::p2p_sync::start_sync_server_internal(
+                        app_handle,
+                        sync_server_state,
+                        db_for_p2p,
+                        vault_for_p2p,
+                        local_sessions_for_p2p,
+                        local_session_output_for_p2p,
+                    )
+                    .await
+                    {
+                        log::warn!("Failed to auto-start P2P sync server: {err}");
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -170,6 +216,10 @@ pub fn run() {
             commands::p2p_sync::p2p_stop_sync_server,
             commands::p2p_sync::p2p_get_sync_status,
             commands::p2p_sync::p2p_export_for_sync,
+            commands::p2p_sync::p2p_list_paired_devices,
+            commands::p2p_sync::p2p_revoke_paired_device,
+            commands::p2p_sync::p2p_pair_with_desktop,
+            commands::p2p_sync::p2p_sync_with_saved_desktop,
             // Git
             commands::git::git_get_info,
             // Command History

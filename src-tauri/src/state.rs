@@ -13,6 +13,16 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub struct LocalSessionState {
+    pub child: Box<dyn portable_pty::Child + Send>,
+    pub master: Box<dyn portable_pty::MasterPty + Send>,
+    pub writer: Box<dyn std::io::Write + Send>,
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub struct LocalSessionState;
+
 pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
     pub db_path: PathBuf,
@@ -25,16 +35,16 @@ pub struct AppState {
     pub biometric: Arc<Box<dyn BiometricProvider>>,
     pub sync: Arc<SyncEngine>,
     pub plugin_runtime: Arc<PluginRuntime>,
-    pub local_sessions: Arc<DashMap<String, tokio::sync::Mutex<tokio::process::Child>>>,
+    pub local_sessions: Arc<DashMap<String, tokio::sync::Mutex<LocalSessionState>>>,
+    pub local_session_output: Arc<DashMap<String, tokio::sync::Mutex<String>>>,
 }
 
 impl AppState {
     pub fn new(db: Connection, db_path: PathBuf) -> Self {
         let db_arc = Arc::new(Mutex::new(db));
         let known_hosts = Arc::new(KnownHostsManager::new(Arc::clone(&db_arc)));
-        let plugin_runtime = Arc::new(
-            PluginRuntime::new().expect("failed to initialize plugin runtime"),
-        );
+        let plugin_runtime =
+            Arc::new(PluginRuntime::new().expect("failed to initialize plugin runtime"));
         Self {
             db: Arc::clone(&db_arc),
             db_path,
@@ -48,6 +58,7 @@ impl AppState {
             sync: Arc::new(SyncEngine::new()),
             plugin_runtime,
             local_sessions: Arc::new(DashMap::new()),
+            local_session_output: Arc::new(DashMap::new()),
         }
     }
 

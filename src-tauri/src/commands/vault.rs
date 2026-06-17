@@ -17,10 +17,7 @@ pub struct VaultStatus {
 /// After obtaining the db_key (from setup or unlock), migrate the database to
 /// SQLCipher if it is still plaintext, then reopen the encrypted connection and
 /// swap it into AppState. `db::open` auto-recovers from `.bak` on failure.
-fn encrypt_and_swap_db(
-    state: &AppState,
-    db_key: &[u8; 32],
-) -> AppResult<()> {
+fn encrypt_and_swap_db(state: &AppState, db_key: &[u8; 32]) -> AppResult<()> {
     let db_path = &state.db_path;
 
     if db::is_plaintext_db(db_path) {
@@ -53,11 +50,18 @@ fn write_meta_from_db(state: &AppState) -> AppResult<()> {
         |row| row.get(0),
     )?;
 
-    let salt = hex::decode(&salt_hex).map_err(|e| crate::errors::AppError::Internal(format!("salt hex: {e}")))?;
-    let nonce = hex::decode(&nonce_hex).map_err(|e| crate::errors::AppError::Internal(format!("nonce hex: {e}")))?;
-    let ct = hex::decode(&ct_hex).map_err(|e| crate::errors::AppError::Internal(format!("ct hex: {e}")))?;
+    let salt = hex::decode(&salt_hex)
+        .map_err(|e| crate::errors::AppError::Internal(format!("salt hex: {e}")))?;
+    let nonce = hex::decode(&nonce_hex)
+        .map_err(|e| crate::errors::AppError::Internal(format!("nonce hex: {e}")))?;
+    let ct = hex::decode(&ct_hex)
+        .map_err(|e| crate::errors::AppError::Internal(format!("ct hex: {e}")))?;
 
     db::write_vault_meta(&state.db_path, &salt, &nonce, &ct)
+}
+
+fn sqlcipher_enabled() -> bool {
+    !cfg!(any(target_os = "android", target_os = "ios"))
 }
 
 #[tauri::command]
@@ -87,15 +91,19 @@ pub async fn vault_status(state: State<'_, AppState>) -> AppResult<VaultStatus> 
 }
 
 #[tauri::command]
-pub async fn vault_setup(
-    state: State<'_, AppState>,
-    password: String,
-) -> AppResult<()> {
+pub async fn vault_setup(state: State<'_, AppState>, password: String) -> AppResult<()> {
     // Step 1: Setup vault in DB (writes verifier, salt, etc.)
     let db_key = {
         let conn = state.db.lock();
         state.vault.setup(&conn, &password)?
     };
+
+    if !sqlcipher_enabled() {
+        let conn = state.db.lock();
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").ok();
+        log::info!("Vault setup complete without SQLCipher on mobile target");
+        return Ok(());
+    }
 
     // Step 2: Drop the old connection and flush WAL so the on-disk plaintext
     // file contains all vault settings before migration reads it.
@@ -132,13 +140,10 @@ pub async fn vault_setup(
 }
 
 #[tauri::command]
-pub async fn vault_unlock(
-    state: State<'_, AppState>,
-    password: String,
-) -> AppResult<()> {
+pub async fn vault_unlock(state: State<'_, AppState>, password: String) -> AppResult<()> {
     let db_path = &state.db_path;
 
-    if db::has_vault_meta(db_path) {
+    if sqlcipher_enabled() && db::has_vault_meta(db_path) {
         // DB is encrypted. Verify password from metadata file, then open DB.
         let master_key = Vault::verify_from_meta(db_path, &password)?;
         let (vault_key, db_key) = crate::crypto::derive_vault_and_db_keys(&master_key);
@@ -187,15 +192,15 @@ pub async fn vault_unlock(
 
 /// Plaintext-DB unlock + migration path. Extracted so it can also be called
 /// when a stale .vault file is detected on the encrypted path.
-fn unlock_plaintext(
-    state: &AppState,
-    db_path: &std::path::Path,
-    password: &str,
-) -> AppResult<()> {
+fn unlock_plaintext(state: &AppState, db_path: &std::path::Path, password: &str) -> AppResult<()> {
     let db_key = {
         let conn = state.db.lock();
         state.vault.unlock(&conn, password)?
     };
+
+    if !sqlcipher_enabled() {
+        return Ok(());
+    }
 
     // Drop old connection before migration.
     {
@@ -252,15 +257,19 @@ pub async fn vault_change_master_password(
         .change_master_password(&mut conn, &current_password, &new_password)?;
 
     // Rotate SQLCipher key if DB is encrypted.
-    if let Some(new_db_key) = state.vault.get_db_key() {
-        let key_hex = hex::encode(new_db_key);
-        conn.execute_batch(&format!("PRAGMA rekey = 'x\"{key_hex}\"'"))?;
-        log::info!("SQLCipher DB key rotated successfully");
+    if sqlcipher_enabled() {
+        if let Some(new_db_key) = state.vault.get_db_key() {
+            let key_hex = hex::encode(new_db_key);
+            conn.execute_batch(&format!("PRAGMA rekey = 'x\"{key_hex}\"'"))?;
+            log::info!("SQLCipher DB key rotated successfully");
+        }
     }
 
     // Update vault metadata file with new verifier.
     drop(conn);
-    write_meta_from_db(&state)?;
+    if sqlcipher_enabled() {
+        write_meta_from_db(&state)?;
+    }
 
     Ok(())
 }

@@ -7,6 +7,8 @@ import { useHostStore } from '@/stores/host-store';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
 import { useDragStore } from '@/stores/drag-store';
+import { useUiStore } from '@/stores/ui-store';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Host } from '@/types';
 
@@ -19,6 +21,8 @@ export function HostItem({ host, onEdit }: HostItemProps) {
   const groups = useHostStore((s) => s.groups);
   const deleteHost = useHostStore((s) => s.deleteHost);
   const addTab = useTabStore((s) => s.addTab);
+  const setActivePanel = useUiStore((s) => s.setActivePanel);
+  const isMobile = useIsMobile();
 
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -33,6 +37,7 @@ export function HostItem({ host, onEdit }: HostItemProps) {
     if (connecting) return;
     setConnecting(true);
     const tabId = addTab({ label: host.label });
+    if (isMobile) setActivePanel('terminal');
     try {
       await useSshStore.getState().connectSaved(tabId, host.id);
     } catch (err) {
@@ -102,6 +107,9 @@ export function HostItem({ host, onEdit }: HostItemProps) {
         role="button"
         tabIndex={0}
         onMouseDown={handleMouseDown}
+        onClick={() => {
+          if (isMobile) void handleConnect();
+        }}
         onDoubleClick={handleConnect}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -113,6 +121,7 @@ export function HostItem({ host, onEdit }: HostItemProps) {
         className={cn(
           'group/host relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm',
           'text-fg-muted transition-colors hover:bg-bg-elevated hover:text-fg',
+          isMobile && 'px-3 py-3',
         )}
         title={`${host.username}@${host.hostname}:${host.port}`}
       >
@@ -143,6 +152,7 @@ export function HostItem({ host, onEdit }: HostItemProps) {
             'invisible flex h-5 w-5 items-center justify-center rounded',
             'text-fg-subtle hover:bg-border-strong hover:text-fg',
             'group-hover/host:visible',
+            isMobile && 'visible h-8 w-8',
           )}
         >
           <Plug size={11} />

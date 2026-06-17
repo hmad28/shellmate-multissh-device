@@ -214,17 +214,16 @@ pub fn is_plaintext_db(path: &Path) -> bool {
 /// 3. Creates a new encrypted DB
 /// 4. Copies all data using `sqlcipher_export`
 /// 5. Replaces the original file
-pub fn migrate_to_encrypted(
-    path: &Path,
-    db_key: &[u8; SQLCIPHER_KEY_LEN],
-) -> AppResult<()> {
+pub fn migrate_to_encrypted(path: &Path, db_key: &[u8; SQLCIPHER_KEY_LEN]) -> AppResult<()> {
     let backup_path = path.with_extension("db.bak");
 
     // Step 0: Checkpoint WAL to flush all pending writes to the main DB file.
     {
         let flush_conn = Connection::open(path)?;
         flush_conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")?;
-        flush_conn.close().map_err(|(_, e)| AppError::Internal(format!("flush close: {e:?}")))?;
+        flush_conn
+            .close()
+            .map_err(|(_, e)| AppError::Internal(format!("flush close: {e:?}")))?;
     }
 
     // Step 1: Backup the original
@@ -242,9 +241,7 @@ pub fn migrate_to_encrypted(
 
     // ATTACH the plaintext database with empty key.
     let path_str = path.to_string_lossy().replace('\'', "''");
-    encrypted_conn.execute_batch(&format!(
-        "ATTACH DATABASE '{path_str}' AS plaintext KEY ''"
-    ))?;
+    encrypted_conn.execute_batch(&format!("ATTACH DATABASE '{path_str}' AS plaintext KEY ''"))?;
 
     // Export from the attached plaintext DB to the main encrypted DB.
     encrypted_conn.execute_batch("SELECT sqlcipher_export('main', 'plaintext')")?;

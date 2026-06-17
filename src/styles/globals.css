@@ -21,6 +21,11 @@
   --color-status-connecting: #f59e0b;
   --color-status-disconnected: #ef4444;
   --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
+  --mobile-system-bottom: max(env(safe-area-inset-bottom, 0px), 36px);
+  --mobile-bottom-nav-height: 58px;
+  --mobile-content-bottom: calc(
+    var(--mobile-bottom-nav-height) + var(--mobile-system-bottom) + 12px
+  );
 }
 
 @layer base {
@@ -80,7 +85,7 @@
 
   /* Mobile safe area utilities */
   .safe-area-inset-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: var(--mobile-system-bottom);
   }
   .safe-area-inset-top {
     padding-top: env(safe-area-inset-top, 0px);

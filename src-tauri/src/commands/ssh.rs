@@ -109,7 +109,9 @@ pub async fn ssh_connect(
         shell: None,
     };
 
-    let session_id = input.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let session_id = input
+        .session_id
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let mgr = Arc::clone(&state.ssh);
     state.vault.record_activity();
     mgr.open(app, params, session_id).await
@@ -141,7 +143,9 @@ pub async fn ssh_quick_connect(
         label: input.label,
         shell: input.shell,
     };
-    let session_id = input.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let session_id = input
+        .session_id
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let mgr = Arc::clone(&state.ssh);
     mgr.open(app, params, session_id).await
 }
@@ -152,6 +156,9 @@ pub async fn ssh_send(
     session_id: String,
     data: String,
 ) -> AppResult<()> {
+    if session_id.starts_with("desktop:") {
+        return crate::commands::local_shell::local_shell_send(state, session_id, data).await;
+    }
     if state.local_sessions.contains_key(&session_id) {
         crate::commands::local_shell::local_shell_send(state, session_id, data).await
     } else {
@@ -166,18 +173,33 @@ pub async fn ssh_resize(
     cols: u32,
     rows: u32,
 ) -> AppResult<()> {
+    if session_id.starts_with("desktop:") {
+        return crate::commands::local_shell::local_shell_resize(
+            state,
+            session_id,
+            cols as u16,
+            rows as u16,
+        )
+        .await;
+    }
     if state.local_sessions.contains_key(&session_id) {
-        Ok(())
+        crate::commands::local_shell::local_shell_resize(
+            state,
+            session_id,
+            cols as u16,
+            rows as u16,
+        )
+        .await
     } else {
         state.ssh.resize(&session_id, cols, rows)
     }
 }
 
 #[tauri::command]
-pub async fn ssh_disconnect(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> AppResult<()> {
+pub async fn ssh_disconnect(state: State<'_, AppState>, session_id: String) -> AppResult<()> {
+    if session_id.starts_with("desktop:") {
+        return crate::commands::local_shell::local_shell_kill(state, session_id).await;
+    }
     if state.local_sessions.contains_key(&session_id) {
         crate::commands::local_shell::local_shell_kill(state, session_id).await
     } else {

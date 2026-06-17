@@ -24,15 +24,11 @@ impl BroadcastManager {
     }
 
     pub fn add_to_broadcast(&self, session_id: &str) {
-        self.broadcast_groups
-            .lock()
-            .insert(session_id.to_string());
+        self.broadcast_groups.lock().insert(session_id.to_string());
     }
 
     pub fn remove_from_broadcast(&self, session_id: &str) {
-        self.broadcast_groups
-            .lock()
-            .remove(session_id);
+        self.broadcast_groups.lock().remove(session_id);
     }
 
     pub fn is_broadcasting(&self, session_id: &str) -> bool {

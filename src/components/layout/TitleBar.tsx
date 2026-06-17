@@ -1,9 +1,11 @@
-import { Minus, Square, X } from 'lucide-react';
+import { Minus, Smartphone, Square, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
+import { useUiStore } from '@/stores/ui-store';
 
 export function TitleBar() {
+  const setActivePanel = useUiStore((s) => s.setActivePanel);
   const handleMinimize = () => {
     void getCurrentWindow().minimize();
   };
@@ -26,7 +28,15 @@ export function TitleBar() {
         <span className="font-medium text-fg">{strings.app.name}</span>
       </div>
 
-      <div className="titlebar-no-drag flex h-full items-stretch">
+      <div className="titlebar-no-drag flex h-full items-center">
+        <button
+          type="button"
+          onClick={() => setActivePanel('p2p-sync')}
+          className="border-accent/50 mr-2 flex h-7 items-center gap-1.5 rounded-md border bg-accent px-2.5 text-xs font-semibold text-white transition-colors hover:bg-accent-hover"
+        >
+          <Smartphone size={13} />
+          <span>Sync Device</span>
+        </button>
         <TitleBarButton
           label={strings.titlebar.minimize}
           onClick={handleMinimize}

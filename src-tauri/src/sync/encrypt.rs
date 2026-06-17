@@ -1,6 +1,6 @@
 use crate::errors::AppResult;
-use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use hkdf::Hkdf;
 use rand::RngCore;
 use sha2::Sha256;
@@ -32,7 +32,11 @@ pub fn encrypt_credentials(plaintext: &[u8], master_key: &[u8]) -> AppResult<(Ve
     Ok((ciphertext, nonce_bytes))
 }
 
-pub fn decrypt_credentials(ciphertext: &[u8], nonce: &[u8; 12], master_key: &[u8]) -> AppResult<Vec<u8>> {
+pub fn decrypt_credentials(
+    ciphertext: &[u8],
+    nonce: &[u8; 12],
+    master_key: &[u8],
+) -> AppResult<Vec<u8>> {
     let key = derive_key_from_master(master_key, HKDF_INFO_CRED);
     let cipher = Aes256Gcm::new_from_slice(&key)
         .map_err(|e| crate::errors::AppError::Internal(format!("AES init: {e}")))?;

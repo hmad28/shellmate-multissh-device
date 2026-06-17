@@ -74,7 +74,6 @@ export function Terminal({ tabId, sessionId }: TerminalProps) {
     term.loadAddon(fit);
     term.loadAddon(links);
     term.open(container);
-    fit.fit();
 
     termRef.current = term;
     fitRef.current = fit;
@@ -88,6 +87,12 @@ export function Terminal({ tabId, sessionId }: TerminalProps) {
     const onResizeDisposable = term.onResize(({ cols, rows }) => {
       void tauri.ssh.resize(sessionId, cols, rows);
     });
+
+    // Fit the terminal layout to the container (triggers term.onResize if different from default)
+    fit.fit();
+
+    // Explicitly send the current terminal size to the backend immediately to ensure synchronization
+    void tauri.ssh.resize(sessionId, term.cols, term.rows);
 
     let resizeObserver: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined') {
@@ -165,8 +170,25 @@ export function Terminal({ tabId, sessionId }: TerminalProps) {
 
     term.focus();
 
+    let desktopPoll: number | null = null;
+    if (isMobile && sessionId.startsWith('desktop:')) {
+      desktopPoll = window.setInterval(() => {
+        void tauri.localShell
+          .read(sessionId)
+          .then((data) => {
+            if (data) scheduleWrite(data);
+          })
+          .catch((error) => {
+            scheduleWrite(`\r\n\x1b[31m[desktop link] ${error}\x1b[0m\r\n`);
+            if (desktopPoll) window.clearInterval(desktopPoll);
+            desktopPoll = null;
+          });
+      }, 120);
+    }
+
     return () => {
       mounted = false;
+      if (desktopPoll) window.clearInterval(desktopPoll);
       for (const fn of unlistenRef.current) fn();
       onDataDisposable.dispose();
       onResizeDisposable.dispose();
@@ -175,7 +197,7 @@ export function Terminal({ tabId, sessionId }: TerminalProps) {
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [sessionId, tabId, updateTabStatus]);
+  }, [sessionId, tabId, updateTabStatus, isMobile]);
 
   return (
     <div className={cn('flex h-full w-full flex-col bg-bg', isMobile ? '' : 'p-2')}>

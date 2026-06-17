@@ -91,12 +91,10 @@ impl SftpManager {
         .map_err(|e| AppError::Internal(format!("SFTP SSH connect failed: {}", e)))?;
 
         let auth_ok = match params.auth {
-            AuthMaterial::Password { password } => {
-                handle
-                    .authenticate_password(&params.username, password)
-                    .await
-                    .map_err(|e| AppError::Internal(format!("SFTP auth error: {}", e)))?
-            }
+            AuthMaterial::Password { password } => handle
+                .authenticate_password(&params.username, password)
+                .await
+                .map_err(|e| AppError::Internal(format!("SFTP auth error: {}", e)))?,
             AuthMaterial::PrivateKey {
                 private_key,
                 passphrase,
@@ -111,9 +109,7 @@ impl SftpManager {
         };
 
         if !auth_ok {
-            return Err(AppError::InvalidInput(
-                "SFTP authentication failed".into(),
-            ));
+            return Err(AppError::InvalidInput("SFTP authentication failed".into()));
         }
 
         let channel = handle
@@ -142,7 +138,11 @@ impl SftpManager {
         Ok(sftp_id)
     }
 
-    pub async fn list_directory(&self, sftp_id: &str, path: Option<String>) -> AppResult<Vec<SftpFile>> {
+    pub async fn list_directory(
+        &self,
+        sftp_id: &str,
+        path: Option<String>,
+    ) -> AppResult<Vec<SftpFile>> {
         let wrapper_arc = {
             let sessions = self.sessions.lock();
             sessions
@@ -154,7 +154,7 @@ impl SftpManager {
         let mut wrapper = wrapper_arc.lock().await;
 
         let target_path = path.unwrap_or_else(|| wrapper.cwd.clone());
-        
+
         let entries = wrapper
             .sftp
             .read_dir(&target_path)
@@ -164,7 +164,7 @@ impl SftpManager {
         let mut files = Vec::new();
         for entry in entries {
             let name = entry.file_name();
-            
+
             if name == "." || name == ".." {
                 continue;
             }
@@ -482,5 +482,8 @@ fn emit_progress(
         total_bytes,
         filename: filename.to_string(),
     };
-    let _ = app.emit(&format!("{}{}", EVENT_SFTP_PROGRESS_PREFIX, transfer_id), &event);
+    let _ = app.emit(
+        &format!("{}{}", EVENT_SFTP_PROGRESS_PREFIX, transfer_id),
+        &event,
+    );
 }
