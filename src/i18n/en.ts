@@ -138,6 +138,7 @@ export const strings = {
     scrollback: 'Scrollback (lines)',
     cursorStyle: 'Cursor style',
     cursorBlink: 'Cursor blink',
+    autoTmux: 'Auto-attach tmux (Unix hosts)',
 
     vaultHeading: 'Vault & Auto-lock',
     vaultDescription: 'How long until the vault locks automatically.',

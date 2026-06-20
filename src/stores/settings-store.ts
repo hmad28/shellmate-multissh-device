@@ -9,6 +9,7 @@ const SETTING_SCROLLBACK = 'terminal.scrollback';
 const SETTING_AUTOLOCK_SECS = 'vault.autolock_secs';
 const SETTING_CURSOR_STYLE = 'terminal.cursor_style';
 const SETTING_CURSOR_BLINK = 'terminal.cursor_blink';
+const SETTING_AUTO_TMUX = 'ssh.auto_tmux';
 
 export type CursorStyle = 'block' | 'bar' | 'underline';
 
@@ -19,6 +20,7 @@ export interface AppSettings {
   autolockSecs: number;
   cursorStyle: CursorStyle;
   cursorBlink: boolean;
+  autoTmux: boolean;
 }
 
 const DEFAULTS: AppSettings = {
@@ -28,6 +30,7 @@ const DEFAULTS: AppSettings = {
   autolockSecs: 15 * 60,
   cursorStyle: 'block',
   cursorBlink: true,
+  autoTmux: false,
 };
 
 interface SettingsStore {
@@ -41,6 +44,7 @@ interface SettingsStore {
   setAutolockSecs: (secs: number) => Promise<void>;
   setCursorStyle: (style: CursorStyle) => Promise<void>;
   setCursorBlink: (blink: boolean) => Promise<void>;
+  setAutoTmux: (enabled: boolean) => Promise<void>;
   saveTheme: (def: ThemeDefinition) => Promise<void>;
   deleteTheme: (id: string) => Promise<void>;
   resolveTheme: (id: string) => ThemeDefinition;
@@ -79,6 +83,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     const cursorStyle = (settingsMap.get(SETTING_CURSOR_STYLE) ??
       DEFAULTS.cursorStyle) as CursorStyle;
     const cursorBlink = settingsMap.get(SETTING_CURSOR_BLINK) !== 'false';
+    const autoTmux = settingsMap.get(SETTING_AUTO_TMUX) === 'true';
 
     const merged: AppSettings = {
       themeId,
@@ -87,6 +92,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       autolockSecs,
       cursorStyle,
       cursorBlink,
+      autoTmux,
     };
 
     set({ settings: merged, themes, loaded: true });
@@ -122,6 +128,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   setCursorBlink: async (blink) => {
     set({ settings: { ...get().settings, cursorBlink: blink } });
     await tauri.settings.set(SETTING_CURSOR_BLINK, blink ? 'true' : 'false');
+  },
+
+  setAutoTmux: async (enabled) => {
+    set({ settings: { ...get().settings, autoTmux: enabled } });
+    await tauri.settings.set(SETTING_AUTO_TMUX, enabled ? 'true' : 'false');
   },
 
   saveTheme: async (def) => {

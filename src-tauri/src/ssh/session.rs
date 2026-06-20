@@ -286,8 +286,31 @@ async fn run_session(
         .await
         .map_err(|e| AppError::Internal(format!("request pty failed: {e}")))?;
 
-    // If a specific shell is requested, exec it; otherwise use the default shell.
-    if let Some(ref shell) = params.shell {
+    let auto_tmux = {
+        use tauri::Manager;
+        let state = app.state::<AppState>();
+        let conn = state.db.lock();
+        conn.query_row(
+            "SELECT value FROM settings WHERE key = 'ssh.auto_tmux'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .map(|v| v == "true")
+        .unwrap_or(false)
+    };
+
+    // If auto_tmux is enabled, attempt to attach to/create a tmux session named "shellmate"
+    if auto_tmux {
+        let fallback = params.shell.as_deref().unwrap_or("exec $SHELL -l");
+        let cmd = format!(
+            "if command -v tmux >/dev/null 2>&1; then tmux attach -t shellmate || tmux new -s shellmate; else {}; fi",
+            fallback
+        );
+        channel
+            .exec(false, &cmd)
+            .await
+            .map_err(|e| AppError::Internal(format!("exec tmux session failed: {e}")))?;
+    } else if let Some(ref shell) = params.shell {
         channel
             .exec(false, shell.as_str())
             .await

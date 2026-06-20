@@ -8,6 +8,7 @@ export function TerminalSettingsTab() {
   const setScrollback = useSettingsStore((s) => s.setScrollback);
   const setCursorStyle = useSettingsStore((s) => s.setCursorStyle);
   const setCursorBlink = useSettingsStore((s) => s.setCursorBlink);
+  const setAutoTmux = useSettingsStore((s) => s.setAutoTmux);
 
   return (
     <section className="flex flex-col gap-4">
@@ -65,15 +66,27 @@ export function TerminalSettingsTab() {
         </Select>
       </Field>
 
-      <label className="flex items-center gap-2 text-xs text-fg">
-        <input
-          type="checkbox"
-          checked={settings.cursorBlink}
-          onChange={(e) => void setCursorBlink(e.target.checked)}
-          className="accent-accent"
-        />
-        <span>{strings.settings.cursorBlink}</span>
-      </label>
+      <div className="flex flex-col gap-2.5">
+        <label className="flex items-center gap-2 text-xs text-fg">
+          <input
+            type="checkbox"
+            checked={settings.cursorBlink}
+            onChange={(e) => void setCursorBlink(e.target.checked)}
+            className="accent-accent"
+          />
+          <span>{strings.settings.cursorBlink}</span>
+        </label>
+
+        <label className="flex items-center gap-2 text-xs text-fg">
+          <input
+            type="checkbox"
+            checked={settings.autoTmux}
+            onChange={(e) => void setAutoTmux(e.target.checked)}
+            className="accent-accent"
+          />
+          <span>{strings.settings.autoTmux}</span>
+        </label>
+      </div>
     </section>
   );
 }
