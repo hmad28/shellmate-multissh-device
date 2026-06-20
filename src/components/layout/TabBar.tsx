@@ -1,4 +1,4 @@
-import { X, FolderOpen, Network, Radio } from 'lucide-react';
+import { X, FolderOpen, Network, Radio, TerminalSquare } from 'lucide-react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { tauri } from '@/lib/tauri';
@@ -52,11 +52,11 @@ export function TabBar() {
       aria-label="Terminal sessions"
       data-drop-zone="tabbar"
       className={cn(
-        'flex h-9 shrink-0 items-stretch',
+        'flex h-11 shrink-0 items-stretch',
         'border-b border-border bg-bg-sidebar',
       )}
     >
-      <div className="flex flex-1 items-stretch overflow-x-auto">
+      <div className="flex flex-1 items-end overflow-x-auto px-2 pt-1">
         {tabs.map((tab) => (
           <TabButton
             key={tab.id}
@@ -69,14 +69,14 @@ export function TabBar() {
       </div>
 
       {activeSessionId && (
-        <div className="flex items-center gap-1 border-l border-border-subtle px-1">
+        <div className="flex items-center gap-1 border-l border-border-subtle px-2">
           <button
             type="button"
             onClick={handleOpenSftp}
             aria-label="Open SFTP Browser"
             title="SFTP Browser"
             className={cn(
-              'flex h-7 w-7 items-center justify-center rounded',
+              'flex h-8 w-8 items-center justify-center rounded-md',
               'text-fg-muted transition-colors hover:bg-bg-elevated hover:text-fg',
             )}
           >
@@ -88,7 +88,7 @@ export function TabBar() {
             aria-label="Port Forwarding"
             title="Port Forwarding"
             className={cn(
-              'flex h-7 w-7 items-center justify-center rounded',
+              'flex h-8 w-8 items-center justify-center rounded-md',
               'text-fg-muted transition-colors hover:bg-bg-elevated hover:text-fg',
             )}
           >
@@ -100,7 +100,7 @@ export function TabBar() {
             aria-label="Broadcast Mode"
             title="Broadcast Mode"
             className={cn(
-              'flex h-7 w-7 items-center justify-center rounded',
+              'flex h-8 w-8 items-center justify-center rounded-md',
               'text-fg-muted transition-colors hover:bg-bg-elevated hover:text-fg',
             )}
           >
@@ -180,16 +180,17 @@ function TabButton({
         }
       }}
       className={cn(
-        'group flex max-w-52 cursor-pointer items-center gap-2 border-r border-border-subtle px-3',
-        'text-sm transition-colors',
+        'group relative mb-1 flex h-9 max-w-64 cursor-pointer items-center gap-2 rounded-md px-3',
+        'border border-transparent text-sm transition-colors',
         active
-          ? 'bg-bg text-fg'
+          ? 'border-border-subtle bg-bg text-fg shadow-sm'
           : 'text-fg-muted hover:bg-bg-elevated hover:text-fg',
-        isHovered && 'bg-accent/15 border-l border-l-accent font-medium',
+        isHovered && 'border-accent/50 bg-accent/15 font-medium',
       )}
     >
+      <TerminalSquare size={14} className="shrink-0 text-fg-subtle" />
       <StatusDot status={tab.status} />
-      <span className="truncate">{tab.label}</span>
+      <span className="min-w-20 flex-1 truncate">{tab.label}</span>
       <button
         type="button"
         onClick={(e) => {
@@ -198,7 +199,7 @@ function TabButton({
         }}
         aria-label={`${strings.tabs.closeTab}: ${tab.label}`}
         className={cn(
-          'flex h-5 w-5 items-center justify-center rounded',
+          'flex h-6 w-6 shrink-0 items-center justify-center rounded',
           'text-fg-subtle hover:bg-border-strong hover:text-fg',
           'opacity-0 transition-opacity group-hover:opacity-100',
           active && 'opacity-100',

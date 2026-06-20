@@ -43,6 +43,7 @@
       'calt' 1;
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
+    touch-action: manipulation;
   }
 
   *:focus-visible {
@@ -71,6 +72,17 @@
   ::-webkit-scrollbar-thumb:hover {
     background: var(--color-fg-subtle);
   }
+}
+
+.xterm {
+  touch-action: none;
+}
+
+.xterm .xterm-viewport {
+  overflow-y: scroll !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: none;
 }
 
 @layer utilities {

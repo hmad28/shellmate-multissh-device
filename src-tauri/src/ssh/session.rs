@@ -419,17 +419,34 @@ fn emit_status(app: &AppHandle, session_id: &str, status: SessionStatus, message
     let event = StatusEvent {
         session_id: session_id.to_string(),
         status,
-        message,
+        message: message.clone(),
     };
     let _ = app.emit(&format!("{EVENT_STATUS_PREFIX}{session_id}"), &event);
+
+    if let Some(sender) = crate::commands::local_shell::get_terminal_streams().get(session_id) {
+        let status_str = match status {
+            SessionStatus::Connecting => "connecting",
+            SessionStatus::Connected => "connected",
+            SessionStatus::Disconnected => "disconnected",
+            SessionStatus::Failed => "failed",
+        };
+        let _ = sender.send(crate::commands::local_shell::StreamMessage::Status {
+            status: status_str.to_string(),
+            message,
+        });
+    }
 }
 
 fn emit_output(app: &AppHandle, session_id: &str, data: String) {
     let event = OutputEvent {
         session_id: session_id.to_string(),
-        data,
+        data: data.clone(),
     };
     let _ = app.emit(&format!("{EVENT_OUTPUT_PREFIX}{session_id}"), &event);
+
+    if let Some(sender) = crate::commands::local_shell::get_terminal_streams().get(session_id) {
+        let _ = sender.send(crate::commands::local_shell::StreamMessage::Output { data });
+    }
 }
 
 fn emit_error(app: &AppHandle, session_id: &str, message: &str) {
@@ -437,4 +454,10 @@ fn emit_error(app: &AppHandle, session_id: &str, message: &str) {
         &format!("{EVENT_ERROR_PREFIX}{session_id}"),
         serde_json::json!({ "sessionId": session_id, "message": message }),
     );
+
+    if let Some(sender) = crate::commands::local_shell::get_terminal_streams().get(session_id) {
+        let _ = sender.send(crate::commands::local_shell::StreamMessage::Error {
+            message: message.to_string(),
+        });
+    }
 }

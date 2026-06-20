@@ -17,7 +17,6 @@ mod sync;
 mod team;
 mod vault;
 use crate::commands::p2p_sync::SyncServerState;
-use crate::commands::vip_access::VipKeyStore;
 use crate::db::DbState;
 use crate::state::AppState;
 use std::sync::Arc;
@@ -109,7 +108,6 @@ pub fn run() {
             let sync_server_state = Arc::new(SyncServerState::new());
 
             app.manage(app_state);
-            app.manage(Arc::new(VipKeyStore::new()));
             app.manage(Arc::clone(&sync_server_state));
             commands::discovery::init(app);
 
@@ -206,11 +204,6 @@ pub fn run() {
             commands::discovery::start_discovery,
             commands::discovery::stop_discovery,
             commands::discovery::start_broadcasting,
-            // VIP Access
-            commands::vip_access::vip_generate_keypair,
-            commands::vip_access::vip_inject_authorized_keys,
-            commands::vip_access::vip_create_localhost_host,
-            commands::vip_access::vip_get_key_status,
             // P2P Sync
             commands::p2p_sync::p2p_start_sync_server,
             commands::p2p_sync::p2p_stop_sync_server,
@@ -220,6 +213,14 @@ pub fn run() {
             commands::p2p_sync::p2p_revoke_paired_device,
             commands::p2p_sync::p2p_pair_with_desktop,
             commands::p2p_sync::p2p_sync_with_saved_desktop,
+            commands::p2p_sync::p2p_auto_sync,
+            commands::p2p_sync::p2p_auto_unlock,
+            commands::p2p_sync::p2p_list_remote_files,
+            commands::p2p_sync::p2p_delete_remote_file,
+            commands::p2p_sync::p2p_send_remote_desktop_input,
+            commands::p2p_sync::p2p_get_remote_desktop_screenshot,
+            commands::p2p_sync::p2p_download_remote_file,
+            commands::p2p_sync::p2p_upload_remote_file,
             // Git
             commands::git::git_get_info,
             // Command History

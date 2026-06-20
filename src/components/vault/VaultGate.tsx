@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { useVaultStore } from '@/stores/vault-store';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { VaultSetup } from './VaultSetup';
 import { VaultUnlock } from './VaultUnlock';
+import { MobileOnboard } from './MobileOnboard';
 
 /**
  * Gates the rest of the app behind vault setup/unlock.
@@ -12,6 +14,7 @@ import { VaultUnlock } from './VaultUnlock';
 export function VaultGate({ children }: { children: React.ReactNode }) {
   const { initialized, unlocked, loading, refresh } = useVaultStore();
   const [bootstrapped, setBootstrapped] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     void refresh().finally(() => setBootstrapped(true));
@@ -24,6 +27,13 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
   if (unlocked) {
     return <>{children}</>;
   }
+
+  // Mobile: use the satellite-device onboarding flow
+  if (isMobile) {
+    return <MobileOnboard />;
+  }
+
+  // Desktop: traditional vault setup/unlock
 
   return (
     <div className="flex h-full w-full items-center justify-center bg-bg p-6">

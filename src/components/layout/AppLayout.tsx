@@ -31,6 +31,36 @@ export function AppLayout() {
   const [pendingVerification, setPendingVerification] =
     useState<PendingVerification | null>(null);
 
+  useEffect(() => {
+    const blockAppZoomKeys = (event: KeyboardEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      if (
+        event.key === '=' ||
+        event.key === '+' ||
+        event.key === '-' ||
+        event.key === '0'
+      ) {
+        event.preventDefault();
+      }
+    };
+    const blockAppZoomWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+    };
+
+    window.addEventListener('keydown', blockAppZoomKeys, { capture: true });
+    window.addEventListener('wheel', blockAppZoomWheel, {
+      capture: true,
+      passive: false,
+    });
+    return () => {
+      window.removeEventListener('keydown', blockAppZoomKeys, {
+        capture: true,
+      });
+      window.removeEventListener('wheel', blockAppZoomWheel, { capture: true });
+    };
+  }, []);
+
   // Host key verification listener — shared between desktop and mobile.
   useEffect(() => {
     const unlisten = listen<any>('ssh:host-key-verification', (event) => {

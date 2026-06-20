@@ -3,6 +3,24 @@ use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{Emitter, State};
+use std::sync::OnceLock;
+use dashmap::DashMap;
+use tokio::sync::mpsc;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum StreamMessage {
+    Output { data: String },
+    Status { status: String, message: Option<String> },
+    Error { message: String },
+}
+
+pub static TERMINAL_STREAMS: OnceLock<DashMap<String, mpsc::UnboundedSender<StreamMessage>>> = OnceLock::new();
+
+pub fn get_terminal_streams() -> &'static DashMap<String, mpsc::UnboundedSender<StreamMessage>> {
+    TERMINAL_STREAMS.get_or_init(DashMap::new)
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -133,6 +151,9 @@ pub async fn spawn_local_shell(
                                 "data": text,
                             }),
                         );
+                        if let Some(sender) = get_terminal_streams().get(&session_id_stdout) {
+                            let _ = sender.send(StreamMessage::Output { data: text });
+                        }
                     }
                     break; // EOF
                 }
@@ -151,6 +172,9 @@ pub async fn spawn_local_shell(
                                 "data": text,
                             }),
                         );
+                        if let Some(sender) = get_terminal_streams().get(&session_id_stdout) {
+                            let _ = sender.send(StreamMessage::Output { data: text });
+                        }
                     }
                     carry_over = invalid.to_vec();
                 }
@@ -166,8 +190,7 @@ pub async fn spawn_local_shell(
     };
 
     // Store the child process handle.
-    local_sessions
-        .insert(session_id.clone(), tokio::sync::Mutex::new(session_state));
+    local_sessions.insert(session_id.clone(), tokio::sync::Mutex::new(session_state));
     output_buffers.insert(session_id.clone(), tokio::sync::Mutex::new(String::new()));
 
     // Spawn status monitoring task
@@ -205,8 +228,12 @@ pub async fn spawn_local_shell(
                         "message": null,
                     }),
                 );
+                if let Some(sender) = get_terminal_streams().get(&session_id_status) {
+                    let _ = sender.send(StreamMessage::Status { status: "disconnected".to_string(), message: None });
+                }
                 local_sessions_status.remove(&session_id_status);
                 output_buffers_status.remove(&session_id_status);
+                get_terminal_streams().remove(&session_id_status);
                 break;
             }
         }
@@ -279,10 +306,7 @@ pub async fn send_local_shell(
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 /// Read output from a local shell (non-blocking, returns available data).
 #[tauri::command]
-pub async fn local_shell_read(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> AppResult<String> {
+pub async fn local_shell_read(state: State<'_, AppState>, session_id: String) -> AppResult<String> {
     read_local_shell(Arc::clone(&state.local_session_output), session_id).await
 }
 
@@ -428,7 +452,7 @@ fn split_valid_utf8(bytes: &[u8]) -> (&[u8], &[u8]) {
 #[cfg(any(target_os = "android", target_os = "ios"))]
 #[tauri::command]
 pub async fn local_shell_spawn(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     shell: Option<String>,
 ) -> AppResult<LocalSession> {
@@ -446,7 +470,21 @@ pub async fn local_shell_spawn(
             .ok_or_else(|| crate::errors::AppError::Internal("missing desktop session".into()))?,
     )
     .map_err(|e| crate::errors::AppError::Internal(format!("invalid desktop session: {e}")))?;
-    session.id = format!("desktop:{}", session.id);
+    
+    let original_id = session.id.clone();
+    session.id = format!("desktop:{}", original_id);
+    
+    // Initialize the local buffer for output fallback
+    state.local_session_output.insert(session.id.clone(), tokio::sync::Mutex::new(String::new()));
+
+    // Spawn the background persistent stream reader task
+    crate::commands::p2p_sync::start_desktop_terminal_stream(
+        app,
+        state.db.clone(),
+        state.local_session_output.clone(),
+        session.id.clone(),
+    );
+
     Ok(session)
 }
 
@@ -469,23 +507,15 @@ pub async fn local_shell_send(
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
 #[tauri::command]
-pub async fn local_shell_read(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> AppResult<String> {
-    let mut body = serde_json::Map::new();
-    body.insert(
-        "sessionId".into(),
-        serde_json::json!(session_id.trim_start_matches("desktop:")),
-    );
-    let value =
-        crate::commands::p2p_sync::p2p_post_desktop_terminal(&state, "/terminal/read", body)
-            .await?;
-    Ok(value
-        .get("data")
-        .and_then(|data| data.as_str())
-        .unwrap_or_default()
-        .to_string())
+pub async fn local_shell_read(state: State<'_, AppState>, session_id: String) -> AppResult<String> {
+    if let Some(entry) = state.local_session_output.get(&session_id) {
+        let mut buffer = entry.value().lock().await;
+        let data = buffer.clone();
+        buffer.clear();
+        Ok(data)
+    } else {
+        Ok(String::new())
+    }
 }
 
 #[cfg(any(target_os = "android", target_os = "ios"))]

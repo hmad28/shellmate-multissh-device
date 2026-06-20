@@ -171,30 +171,6 @@ export const tauri = {
     startBroadcasting: (serviceName: string, port: number) =>
       invoke<void>('start_broadcasting', { serviceName, port }),
   },
-  vipAccess: {
-    generateKeypair: () => invoke<string>('vip_generate_keypair'),
-    injectAuthorizedKeys: (pubkeyHex: string, asAdmin?: boolean) =>
-      invoke<string>('vip_inject_authorized_keys', { pubkeyHex, asAdmin }),
-    createLocalhostHost: (
-      credentialId: string,
-      label?: string,
-      username?: string,
-      asAdmin?: boolean,
-    ) =>
-      invoke<string>('vip_create_localhost_host', {
-        credentialId,
-        label,
-        username,
-        asAdmin,
-      }),
-    getKeyStatus: () =>
-      invoke<{
-        hostExists: boolean;
-        adminHostExists: boolean;
-        authorizedKeysInjected: boolean;
-        adminKeysInjected: boolean;
-      }>('vip_get_key_status'),
-  },
   p2p: {
     startSyncServer: () => invoke<string>('p2p_start_sync_server'),
     stopSyncServer: () => invoke<void>('p2p_stop_sync_server'),
@@ -224,6 +200,36 @@ export const tauri = {
         deviceName: deviceName ?? null,
       }),
     syncWithSavedDesktop: () => invoke<string>('p2p_sync_with_saved_desktop'),
+    autoSync: () => invoke<string>('p2p_auto_sync'),
+    autoUnlock: () => invoke<string>('p2p_auto_unlock'),
+    listRemoteFiles: (path?: string) =>
+      invoke<{
+        success: boolean;
+        currentPath: string;
+        items: { name: string; size: number; isDir: boolean; modified?: number }[];
+      }>('p2p_list_remote_files', { path: path ?? null }),
+    deleteRemoteFile: (path: string) =>
+      invoke<{ success: boolean }>('p2p_delete_remote_file', { path }),
+    sendRemoteDesktopInput: (
+      event: string,
+      x?: number | null,
+      y?: number | null,
+      button?: string | null,
+      key?: string | null,
+    ) =>
+      invoke<{ success: boolean }>('p2p_send_remote_desktop_input', {
+        event,
+        x: x ?? null,
+        y: y ?? null,
+        button: button ?? null,
+        key: key ?? null,
+      }),
+    getRemoteDesktopScreenshot: () =>
+      invoke<string>('p2p_get_remote_desktop_screenshot'),
+    downloadRemoteFile: (remotePath: string, localPath: string) =>
+      invoke<void>('p2p_download_remote_file', { remotePath, localPath }),
+    uploadRemoteFile: (remotePath: string, localPath: string) =>
+      invoke<void>('p2p_upload_remote_file', { remotePath, localPath }),
   },
   app: {
     version: () => invoke<string>('app_version'),

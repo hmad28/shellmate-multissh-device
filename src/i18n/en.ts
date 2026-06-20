@@ -250,15 +250,6 @@ export const strings = {
     cancelled: 'Reconnection cancelled',
     cancel: 'Cancel',
   },
-  vipAccess: {
-    title: 'VIP Passwordless Access',
-    description:
-      'Configure passwordless SSH access from your mobile device to this desktop.',
-    checkStatus: 'Check Status',
-    authKeys: 'authorized_keys',
-    localhostHost: 'VIP Host',
-    configure: 'Configure VIP Access',
-  },
   p2pSync: {
     title: 'P2P Local Sync',
     description:

@@ -58,6 +58,9 @@ dirs = "5"
 hex = "0.4"
 dashmap = "6"
 which = "7"
+xcap = "0.9.6"
+enigo = "0.3.0"
+image = "0.25.6"
 
 [target.'cfg(not(windows))'.dependencies]
 reqwest = { version = "0.13", features = ["json"] }

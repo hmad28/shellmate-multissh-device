@@ -28,4 +28,3 @@ pub mod system;
 pub mod team;
 pub mod theme;
 pub mod vault;
-pub mod vip_access;

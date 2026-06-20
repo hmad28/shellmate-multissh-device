@@ -36,23 +36,23 @@ export function SettingsDialog({
       title={strings.settings.title}
       size="lg"
     >
-      <div className="flex min-h-[420px] gap-4">
+      <div className="flex min-h-[420px] flex-col gap-4">
         <nav
           aria-label="Settings sections"
-          className="w-36 shrink-0 border-r border-border-subtle pr-2"
+          className="shrink-0 border-b border-border-subtle pb-3"
         >
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex gap-1 overflow-x-auto rounded-md bg-bg-elevated p-1">
             {tabs.map((t) => (
-              <li key={t.id}>
+              <li key={t.id} className="shrink-0">
                 <button
                   type="button"
                   onClick={() => setTab(t.id)}
                   aria-current={tab === t.id ? 'page' : undefined}
                   className={cn(
-                    'w-full rounded-md px-3 py-1.5 text-left text-sm transition-colors',
+                    'rounded px-3 py-1.5 text-sm transition-colors',
                     tab === t.id
-                      ? 'bg-bg-elevated text-fg'
-                      : 'text-fg-muted hover:bg-bg-elevated hover:text-fg',
+                      ? 'bg-bg text-fg shadow-sm'
+                      : 'text-fg-muted hover:bg-bg-panel hover:text-fg',
                   )}
                 >
                   {t.label}

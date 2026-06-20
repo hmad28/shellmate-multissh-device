@@ -1,18 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   KeyRound,
   Laptop,
   Plus,
   QrCode,
+  RotateCcw,
   Server,
   TerminalSquare,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { QuickConnect } from '@/components/connect/QuickConnect';
 import { HostList } from '@/components/hosts/HostList';
 import { SnippetPanel } from '@/components/snippets/SnippetPanel';
 import { Terminal } from '@/components/terminal/Terminal';
+import {
+  TERMINAL_ZOOM_IN_EVENT,
+  TERMINAL_ZOOM_OUT_EVENT,
+  TERMINAL_ZOOM_RESET_EVENT,
+} from '@/components/terminal/Terminal';
 import { ToastContainer } from '@/components/ui/Toast';
 import { useHostStore } from '@/stores/host-store';
 import { useSshStore } from '@/stores/ssh-store';
@@ -33,19 +41,65 @@ export function MobileLayout() {
   const loadAll = useHostStore((s) => s.loadAll);
   const [mode, setMode] = useState<MobileHomeMode>('home');
   const [syncState, setSyncState] = useState<MobileSyncState>('unknown');
+  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!vaultUnlocked) return;
+    if (!vaultUnlocked) {
+      setSyncState('unknown');
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current = null;
+      }
+      return;
+    }
     void loadAll();
     setSyncState('syncing');
     void tauri.p2p
+      .autoSync()
+      .then(() => setSyncState('paired'))
+      .catch(() => setSyncState('unknown'));
+
+    // Listen for auto-sync completion
+    const unlisten = import('@tauri-apps/api/event').then(({ listen }) =>
+      listen<string>('p2p:auto-sync-complete', () => {
+        setSyncState('paired');
+        void useHostStore.getState().loadAll();
+      }),
+    );
+
+    // Periodic background sync every 60s
+    syncIntervalRef.current = setInterval(() => {
+      void tauri.p2p
+        .autoSync()
+        .then(() => setSyncState('paired'))
+        .catch(() => setSyncState((current) => current));
+    }, 60_000);
+
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current = null;
+      }
+    };
+  }, [vaultUnlocked, loadAll]);
+
+  useEffect(() => {
+    if (!vaultUnlocked) return;
+    let cancelled = false;
+    void tauri.p2p
       .syncWithSavedDesktop()
       .then(() => {
-        setSyncState('paired');
+        if (!cancelled) setSyncState('paired');
         return useHostStore.getState().loadAll();
       })
-      .catch(() => setSyncState('unknown'));
-  }, [vaultUnlocked, loadAll]);
+      .catch(() => {
+        if (!cancelled) setSyncState('unknown');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [vaultUnlocked]);
 
   useEffect(() => {
     if (activePanel !== 'hosts') return;
@@ -152,49 +206,16 @@ function MobileHeader({
           )}
           title={syncLabel(syncState)}
         />
-        <SessionPills />
       </div>
     </header>
   );
 }
 
 function syncLabel(syncState: MobileSyncState) {
-  if (syncState === 'paired') return 'Laptop paired';
-  if (syncState === 'syncing') return 'Syncing laptop';
+  if (syncState === 'paired') return 'Main device paired';
+  if (syncState === 'syncing') return 'Syncing main device';
   if (syncState === 'error') return 'Sync needs attention';
-  return 'No laptop link';
-}
-
-function SessionPills() {
-  const tabs = useTabStore((s) => s.tabs);
-  const activeTabId = useTabStore((s) => s.activeTabId);
-  const setActiveTab = useTabStore((s) => s.setActiveTab);
-  const setActivePanel = useUiStore((s) => s.setActivePanel);
-
-  if (tabs.length === 0) return null;
-
-  return (
-    <div className="flex max-w-[46vw] gap-1 overflow-x-auto">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          onClick={() => {
-            setActiveTab(tab.id);
-            setActivePanel('terminal');
-          }}
-          className={cn(
-            'shrink-0 rounded-full border px-2.5 py-1 text-[11px]',
-            tab.id === activeTabId
-              ? 'border-accent bg-accent text-white'
-              : 'border-border-strong bg-bg-elevated text-fg-muted',
-          )}
-        >
-          <span className="block max-w-24 truncate">{tab.label}</span>
-        </button>
-      ))}
-    </div>
-  );
+  return 'No main device link';
 }
 
 function MobileHome({
@@ -212,7 +233,7 @@ function MobileHome({
   const openLaptopTerminal = async () => {
     if (openingDesktop) return;
     setOpeningDesktop(true);
-    const tabId = addTab({ label: 'Laptop terminal' });
+    const tabId = addTab({ label: 'Main device terminal' });
     setActivePanel('terminal');
     try {
       await useSshStore.getState().connectLocal(tabId);
@@ -225,26 +246,28 @@ function MobileHome({
     <div className="h-full overflow-y-auto px-4 py-4">
       <section className="mb-5">
         <p className="text-sm leading-6 text-fg-muted">
-          Connect this phone to your existing ShellMate setup, or add a server
-          manually for direct SSH access.
+          Sync this phone to your main ShellMate device, or make this phone the
+          first host and add servers manually.
         </p>
       </section>
 
       <div className="grid gap-3">
         <ActionTile
           icon={<Laptop size={22} />}
-          title="Sync from laptop"
-          body="Pair with ShellMate over LAN or a trusted VPN/tunnel."
+          title="Sync device"
+          body="Use the same vault, hosts, credentials, and snippets as your main device."
           onClick={() => onSelect('sync')}
           primary
         />
         <ActionTile
           icon={<TerminalSquare size={22} />}
-          title={openingDesktop ? 'Opening laptop...' : 'Laptop terminal'}
+          title={
+            openingDesktop ? 'Opening main device...' : 'Main device terminal'
+          }
           body={
             syncState === 'paired'
-              ? 'Run a terminal on the paired laptop through ShellMate.'
-              : 'Pair this phone first to use the laptop-backed terminal.'
+              ? 'Run a terminal on the paired main device through ShellMate.'
+              : 'Pair this phone first to use a main-device terminal.'
           }
           onClick={() => {
             if (syncState === 'paired') void openLaptopTerminal();
@@ -253,8 +276,8 @@ function MobileHome({
         />
         <ActionTile
           icon={<Plus size={22} />}
-          title="Add host manually"
-          body="Connect directly to a laptop, VPS, or server with SSH details."
+          title="Setup host"
+          body="Use this phone as the first device and connect directly to a VPS or server."
           onClick={() => onSelect('manual')}
         />
         <ActionTile
@@ -263,7 +286,7 @@ function MobileHome({
           body={
             hosts.length > 0
               ? `${hosts.length} host${hosts.length > 1 ? 's' : ''} available`
-              : 'No saved hosts on this phone yet.'
+              : 'No synced or saved hosts yet.'
           }
           onClick={() => onSelect('saved')}
         />
@@ -345,17 +368,17 @@ function PairDeviceScreen({ onPaired }: { onPaired: () => void }) {
           <div>
             <h2 className="text-sm font-semibold text-fg">Pair with laptop</h2>
             <p className="text-xs text-fg-muted">
-              Open ShellMate on laptop, then start device sync.
+              Open ShellMate on your main device, then start device sync.
             </p>
           </div>
         </div>
 
         <ol className="space-y-2 text-xs leading-5 text-fg-muted">
-          <li>1. On laptop: open ShellMate desktop.</li>
+          <li>1. On main device: open ShellMate.</li>
           <li>2. Go to Sync Device and generate a pairing code or QR.</li>
           <li>
-            3. Paste the pairing code below while the laptop is reachable by
-            LAN, Tailscale/WireGuard, Cloudflare Tunnel, or ADB reverse.
+            3. Paste the pairing code below while the main device is reachable
+            by LAN, Tailscale/WireGuard, Cloudflare Tunnel, or ADB reverse.
           </li>
         </ol>
       </div>
@@ -432,6 +455,7 @@ function MobileTerminalScreen() {
   const tabs = useTabStore((s) => s.tabs);
   const activeTabId = useTabStore((s) => s.activeTabId);
   const closeTab = useTabStore((s) => s.closeTab);
+  const setActiveTab = useTabStore((s) => s.setActiveTab);
   const setActivePanel = useUiStore((s) => s.setActivePanel);
   const sessionByTab = useSshStore((s) => s.sessionByTab);
   const activeTab =
@@ -464,26 +488,77 @@ function MobileTerminalScreen() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black">
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-bg-sidebar px-3">
-        <span
-          className={cn(
-            'h-2 w-2 shrink-0 rounded-full',
-            activeTab.status === 'connected' && 'bg-status-connected',
-            activeTab.status === 'connecting' && 'bg-status-connecting',
-            activeTab.status === 'disconnected' && 'bg-status-disconnected',
-          )}
-        />
-        <p className="min-w-0 flex-1 truncate text-xs font-medium text-fg">
-          {activeTab.label}
-        </p>
-        <button
-          type="button"
-          onClick={handleClose}
-          aria-label="Close terminal"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-fg-muted active:bg-bg-elevated"
-        >
-          <X size={16} />
-        </button>
+      <div className="shrink-0 border-b border-border bg-bg-sidebar px-2 py-2">
+        <div className="mb-2 flex items-center gap-1 overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'flex h-8 min-w-24 max-w-44 shrink-0 items-center gap-1.5 rounded-md border px-2 text-left text-[11px]',
+                tab.id === activeTab.id
+                  ? 'border-accent bg-bg text-fg'
+                  : 'border-border-subtle bg-bg-elevated text-fg-muted',
+              )}
+            >
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 shrink-0 rounded-full',
+                  tab.status === 'connected' && 'bg-status-connected',
+                  tab.status === 'connecting' && 'bg-status-connecting',
+                  tab.status === 'disconnected' && 'bg-status-disconnected',
+                )}
+              />
+              <span className="truncate">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <TerminalSquare size={16} className="shrink-0 text-fg-subtle" />
+          <p className="min-w-0 flex-1 truncate text-xs font-medium text-fg">
+            {activeTab.label}
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(new Event(TERMINAL_ZOOM_OUT_EVENT))
+            }
+            aria-label="Smaller terminal text"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-fg-muted active:bg-bg-elevated"
+          >
+            <ZoomOut size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(new Event(TERMINAL_ZOOM_IN_EVENT))
+            }
+            aria-label="Bigger terminal text"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-fg-muted active:bg-bg-elevated"
+          >
+            <ZoomIn size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(new Event(TERMINAL_ZOOM_RESET_EVENT))
+            }
+            aria-label="Reset terminal text"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-fg-muted active:bg-bg-elevated"
+          >
+            <RotateCcw size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close terminal"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-fg-muted active:bg-bg-elevated"
+          >
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1">

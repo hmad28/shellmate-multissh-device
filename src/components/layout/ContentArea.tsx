@@ -6,12 +6,10 @@ import { SnippetPanel } from '@/components/snippets/SnippetPanel';
 import { SftpBrowser } from '@/components/sftp/SftpBrowser';
 import { PortForwardPanel } from '@/components/port-forward/PortForwardPanel';
 import { BroadcastModePanel } from '@/components/terminal/BroadcastModePanel';
-import { VipAccessPanel } from '@/components/vip/VipAccessPanel';
 import { P2pSyncPanel } from '@/components/sync/P2pSyncPanel';
 import { CommandHistoryPanel } from '@/components/history/CommandHistoryPanel';
 import { ServerStatsPanel } from '@/components/server/ServerStatsPanel';
 import { DockerPanel } from '@/components/server/DockerPanel';
-import { ImportPanel } from '@/components/import/ImportPanel';
 import { Terminal } from '@/components/terminal/Terminal';
 import { useSshStore } from '@/stores/ssh-store';
 import { useTabStore } from '@/stores/tab-store';
@@ -38,14 +36,12 @@ export function ContentArea() {
   const portForwardSessionId = useUiStore((s) => s.portForwardSessionId);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [snippetOpen, setSnippetOpen] = useState(false);
-  const [vipOpen, setVipOpen] = useState(false);
   const [p2pOpen, setP2pOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     if (activePanel === 'settings') setSettingsOpen(true);
     if (activePanel === 'snippets') setSnippetOpen(true);
-    if (activePanel === 'vip-access') setVipOpen(true);
     if (activePanel === 'p2p-sync') setP2pOpen(true);
     if (activePanel === 'history') setHistoryOpen(true);
   }, [activePanel]);
@@ -90,11 +86,6 @@ export function ContentArea() {
           <DockerPanelWrapper />
         </main>
       )}
-      {activePanel === 'import' && (
-        <main className="flex flex-1 overflow-hidden bg-bg">
-          <ImportPanel />
-        </main>
-      )}
 
       <SettingsDialog
         open={settingsOpen}
@@ -114,18 +105,9 @@ export function ContentArea() {
         <SnippetPanel />
       </PopupDialog>
       <PopupDialog
-        open={vipOpen}
-        title="VIP Passwordless Access"
-        onClose={() => {
-          setVipOpen(false);
-          if (activePanel === 'vip-access') setActivePanel('hosts');
-        }}
-      >
-        <VipAccessPanel />
-      </PopupDialog>
-      <PopupDialog
         open={p2pOpen}
         title="Sync Phone"
+        className="max-w-4xl max-h-[90vh]"
         onClose={() => {
           setP2pOpen(false);
           if (activePanel === 'p2p-sync') setActivePanel('hosts');
@@ -152,11 +134,13 @@ function PopupDialog({
   title,
   onClose,
   children,
+  className,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  className?: string;
 }) {
   if (!open) return null;
   return (
@@ -165,7 +149,10 @@ function PopupDialog({
       onClick={onClose}
     >
       <div
-        className="relative max-h-[80vh] w-full max-w-lg overflow-auto rounded-lg border border-border bg-bg shadow-xl"
+        className={cn(
+          "relative max-h-[80vh] w-full max-w-lg overflow-auto rounded-lg border border-border bg-bg shadow-xl",
+          className
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">

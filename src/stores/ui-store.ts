@@ -8,12 +8,10 @@ export type ActivePanel =
   | 'sftp'
   | 'port-forward'
   | 'broadcast'
-  | 'vip-access'
   | 'p2p-sync'
   | 'history'
   | 'server-stats'
-  | 'docker'
-  | 'import';
+  | 'docker';
 
 interface UiStore {
   sidebarCollapsed: boolean;

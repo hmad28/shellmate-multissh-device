@@ -2,7 +2,7 @@ use crate::commands::credential::load_credential_plaintext;
 use crate::errors::{AppError, AppResult};
 use crate::ssh::session::{AuthMaterial, ConnectParams};
 use crate::state::AppState;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
@@ -13,7 +13,7 @@ pub struct ConnectByHostInput {
     pub session_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum QuickConnectAuth {
     #[serde(rename = "password")]
@@ -39,6 +39,7 @@ pub struct QuickConnectInput {
 
 /// Open an SSH session for a saved host. Decrypts the credential via the
 /// vault (must be unlocked) and starts a session task.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 pub async fn ssh_connect(
     app: AppHandle,
@@ -117,8 +118,40 @@ pub async fn ssh_connect(
     mgr.open(app, params, session_id).await
 }
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+pub async fn ssh_connect(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: ConnectByHostInput,
+) -> AppResult<String> {
+    let original_id = input.session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let mut body = serde_json::Map::new();
+    body.insert("hostId".into(), serde_json::json!(input.host_id));
+    body.insert("sessionId".into(), serde_json::json!(original_id));
+
+    let value = crate::commands::p2p_sync::p2p_post_desktop_terminal(&state, "/ssh/connect", body).await?;
+    let res_session_id = value
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .ok_or_else(|| AppError::Internal("missing session id in connect response".into()))?;
+
+    let session_id = format!("desktop:{}", res_session_id);
+    state.local_session_output.insert(session_id.clone(), tokio::sync::Mutex::new(String::new()));
+
+    crate::commands::p2p_sync::start_desktop_terminal_stream(
+        app,
+        state.db.clone(),
+        state.local_session_output.clone(),
+        session_id.clone(),
+    );
+
+    Ok(session_id)
+}
+
 /// Open an SSH session without saving the credential. Useful for testing /
 /// one-off connections during MVP development.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 pub async fn ssh_quick_connect(
     app: AppHandle,
@@ -148,6 +181,42 @@ pub async fn ssh_quick_connect(
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let mgr = Arc::clone(&state.ssh);
     mgr.open(app, params, session_id).await
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+pub async fn ssh_quick_connect(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: QuickConnectInput,
+) -> AppResult<String> {
+    let original_id = input.session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let mut body = serde_json::Map::new();
+    body.insert("hostname".into(), serde_json::json!(input.hostname));
+    body.insert("port".into(), serde_json::json!(input.port));
+    body.insert("username".into(), serde_json::json!(input.username));
+    body.insert("label".into(), serde_json::json!(input.label));
+    body.insert("auth".into(), serde_json::json!(input.auth));
+    body.insert("shell".into(), serde_json::json!(input.shell));
+    body.insert("sessionId".into(), serde_json::json!(original_id));
+
+    let value = crate::commands::p2p_sync::p2p_post_desktop_terminal(&state, "/ssh/quick_connect", body).await?;
+    let res_session_id = value
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .ok_or_else(|| AppError::Internal("missing session id in quick connect response".into()))?;
+
+    let session_id = format!("desktop:{}", res_session_id);
+    state.local_session_output.insert(session_id.clone(), tokio::sync::Mutex::new(String::new()));
+
+    crate::commands::p2p_sync::start_desktop_terminal_stream(
+        app,
+        state.db.clone(),
+        state.local_session_output.clone(),
+        session_id.clone(),
+    );
+
+    Ok(session_id)
 }
 
 #[tauri::command]

@@ -1,6 +1,25 @@
+import { useEffect, useState } from 'react';
 import { strings } from '@/i18n/en';
+import { tauri } from '@/lib/tauri';
 
 export function GeneralSettingsTab() {
+  const [version, setVersion] = useState('...');
+
+  useEffect(() => {
+    let mounted = true;
+    void tauri.app
+      .version()
+      .then((value) => {
+        if (mounted) setVersion(value);
+      })
+      .catch(() => {
+        if (mounted) setVersion('unknown');
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <section className="flex flex-col gap-4">
       <header>
@@ -14,7 +33,7 @@ export function GeneralSettingsTab() {
 
       <dl className="flex flex-col gap-2 text-xs">
         <Row label={strings.settings.appName} value="ShellMate" />
-        <Row label={strings.settings.version} value="0.1.0" />
+        <Row label={strings.settings.version} value={version} />
         <Row label={strings.settings.license} value="MIT" />
       </dl>
 

@@ -4,12 +4,10 @@ import {
   Code2,
   Smartphone,
   Settings as SettingsIcon,
-  Shield,
   PanelLeftClose,
   PanelLeftOpen,
   Activity,
   Box,
-  Import,
 } from 'lucide-react';
 import { strings } from '@/i18n/en';
 import { cn } from '@/lib/cn';
@@ -108,26 +106,6 @@ export function Sidebar() {
               }
             />
             <PanelButton
-              icon={<Shield size={14} />}
-              label={strings.vipAccess?.title ?? 'VIP Access'}
-              active={activePanel === 'vip-access'}
-              onClick={() =>
-                setActivePanel(
-                  activePanel === 'vip-access' ? 'hosts' : 'vip-access',
-                )
-              }
-            />
-            <PanelButton
-              icon={<Smartphone size={14} />}
-              label="Sync Phone"
-              active={activePanel === 'p2p-sync'}
-              onClick={() =>
-                setActivePanel(
-                  activePanel === 'p2p-sync' ? 'hosts' : 'p2p-sync',
-                )
-              }
-            />
-            <PanelButton
               icon={<Activity size={14} />}
               label="Server Stats"
               active={activePanel === 'server-stats'}
@@ -143,14 +121,6 @@ export function Sidebar() {
               active={activePanel === 'docker'}
               onClick={() =>
                 setActivePanel(activePanel === 'docker' ? 'hosts' : 'docker')
-              }
-            />
-            <PanelButton
-              icon={<Import size={14} />}
-              label="Import Hosts"
-              active={activePanel === 'import'}
-              onClick={() =>
-                setActivePanel(activePanel === 'import' ? 'hosts' : 'import')
               }
             />
 

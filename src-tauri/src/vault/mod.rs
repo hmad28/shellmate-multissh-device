@@ -112,6 +112,21 @@ impl Vault {
         Ok(())
     }
 
+    /// Unlock with a pre-derived vault key (used when importing from satellite device).
+    /// The db_key is set to the same key since mobile doesn't use SQLCipher.
+    pub fn unlock_with_vault_key(&self, vault_key: &[u8; 32]) -> AppResult<()> {
+        let mut inner = self.inner.write();
+        if let Some(mut prev) = inner.key.replace(*vault_key) {
+            prev.zeroize();
+        }
+        // Mobile doesn't use SQLCipher, so set db_key same as vault_key
+        if let Some(mut prev) = inner.db_key.replace(*vault_key) {
+            prev.zeroize();
+        }
+        inner.last_activity = Instant::now();
+        Ok(())
+    }
+
     /// Returns true if a vault has already been initialized in the given DB.
     pub fn is_initialized(conn: &Connection) -> AppResult<bool> {
         let value = get_setting(conn, SETTING_VAULT_INITIALIZED)?;
