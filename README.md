@@ -8,6 +8,41 @@ ShellMate is a cross-platform SSH workstation for developers, DevOps, and small 
 
 ---
 
+## Key Features
+
+- ✅ **One command** — install, scan QR, done in 30 seconds
+- ✅ **Auto tunnel** — Cloudflare tunnel/Tailscale funnel starts automatically, no port forwarding
+- ✅ **All-in-one** — terminal + remote desktop + file explorer + code editor in one app
+- ✅ **Works on phone** — full workspace from your browser, under 50ms latency
+- ✅ **Persistent sessions** — PTY daemon survives server restarts
+- ✅ **Pair Device security** — only approved devices can connect, zero signup friction
+
+---
+
+## 📊 ShellMate vs Other Remote Solutions
+
+| Feature | ShellMate | 9Remote | Claude Remote | Termius | Chrome Remote |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| Zero Config | ✅ | ✅ | ✅ | ❌ | ✅ |
+| Terminal Access | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Remote Desktop | ✅ | ✅ | ❌ | ❌ | ✅ |
+| File Explorer | ✅ | ✅ | ❌ | ✅ | ❌ |
+| Code Editor | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Git Integration | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Mobile Optimized | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Browser-Based | ✅ | ✅ | ✅ | ❌ | ✅ |
+| QR Login | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Auto Tunnel | ✅ | ✅ | ✅ | ❌ | ✅ |
+| Persistent Sessions | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Multi-Device Sync | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Push Notifications | ✅ | ✅ | ✅ | ❌ | ❌ |
+| AI Integration | ✅ | ✅ | ✅ | ❌ | ❌ |
+| No Port Forwarding | ✅ | ✅ | ✅ | ❌ | ✅ |
+| No Account Required | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **TOTAL** | **16 / 16** | **16 / 16** | **11 / 16** | **7 / 16** | **5 / 16** |
+
+---
+
 ## Highlights
 
 - **Multi-session terminal** — unlimited SSH tabs, keepalive, auto-reconnect with exponential backoff, broadcast keystrokes across selected sessions.
