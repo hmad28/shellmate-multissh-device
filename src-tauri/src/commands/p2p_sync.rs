@@ -2331,16 +2331,43 @@ async fn handle_local_proxy(
     use tokio::io::AsyncWriteExt;
 
     let request_str = String::from_utf8_lossy(initial_buf);
-    let device_id = get_http_header(&request_str, "X-Device-Id");
-    let device_name = get_http_header(&request_str, "X-Device-Name");
-    let token = get_http_header(&request_str, "X-Token");
+    
+    // 1. Try to get credentials from HTTP headers
+    let mut device_id = get_http_header(&request_str, "X-Device-Id");
+    let mut device_name = get_http_header(&request_str, "X-Device-Name");
+    let mut token = get_http_header(&request_str, "X-Token");
 
-    let authorized = match (device_id, device_name, token) {
+    // Parse path and query parameters
+    let (clean_path, query_params) = parse_path_and_query(path);
+
+    // 2. If headers are missing, check query parameters
+    if device_id.is_none() {
+        device_id = query_params.get("device_id").cloned();
+    }
+    if device_name.is_none() {
+        device_name = query_params.get("device_name").cloned();
+    }
+    if token.is_none() {
+        token = query_params.get("token").cloned();
+    }
+
+    // 3. If still missing, check Cookies
+    if device_id.is_none() {
+        device_id = get_cookie_value(&request_str, "sm_device_id");
+    }
+    if device_name.is_none() {
+        device_name = get_cookie_value(&request_str, "sm_device_name");
+    }
+    if token.is_none() {
+        token = get_cookie_value(&request_str, "sm_token");
+    }
+
+    let authorized = match (&device_id, &device_name, &token) {
         (Some(did), Some(dname), Some(tok)) => {
             let req_payload = TerminalRequest {
-                device_id: did,
-                device_name: dname,
-                token: tok,
+                device_id: did.clone(),
+                device_name: dname.clone(),
+                token: tok.clone(),
                 session_id: None,
                 shell: None,
                 data: None,
@@ -2358,12 +2385,17 @@ async fn handle_local_proxy(
         return;
     }
 
-    let path_parts: Vec<&str> = path.split('/').collect();
+    let path_parts: Vec<&str> = clean_path.split('/').collect();
     if path_parts.len() >= 3 {
         let port_str = path_parts[2];
         if let Ok(target_port) = port_str.parse::<u16>() {
             let subpath = path_parts[3..].join("/");
-            let target_url = format!("http://localhost:{}/{}", target_port, subpath);
+            let query_part = if let Some(pos) = path.find('?') {
+                &path[pos..]
+            } else {
+                ""
+            };
+            let target_url = format!("http://localhost:{}/{}{}", target_port, subpath, query_part);
 
             let client = get_reqwest_client();
             let method_upper = method.to_uppercase();
@@ -2400,6 +2432,23 @@ async fn handle_local_proxy(
                             }
                         }
                     }
+
+                    // Set/refresh Cookie mapping for all assets loading without query params
+                    if let (Some(did), Some(dname), Some(tok)) = (&device_id, &device_name, &token) {
+                        resp_str.push_str(&format!(
+                            "Set-Cookie: sm_device_id={}; Path=/; HttpOnly\r\n",
+                            percent_encode(did)
+                        ));
+                        resp_str.push_str(&format!(
+                            "Set-Cookie: sm_device_name={}; Path=/; HttpOnly\r\n",
+                            percent_encode(dname)
+                        ));
+                        resp_str.push_str(&format!(
+                            "Set-Cookie: sm_token={}; Path=/; HttpOnly\r\n",
+                            percent_encode(tok)
+                        ));
+                    }
+
                     resp_str.push_str(&format!("Content-Length: {}\r\n\r\n", resp_bytes.len()));
 
                     if stream.write_all(resp_str.as_bytes()).await.is_ok() {
@@ -2410,7 +2459,7 @@ async fn handle_local_proxy(
                 Err(e) => {
                     let err_body = serde_json::json!({"success": false, "error": e.to_string()}).to_string();
                     let response = format!(
-                        "HTTP/1.1 502 Bad Gateway\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                        "HTTP/1.1 520 Web Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                         err_body.len(), err_body
                     );
                     let _ = stream.write_all(response.as_bytes()).await;
@@ -2840,6 +2889,16 @@ async fn run_server(
                                 #[cfg(not(any(target_os = "android", target_os = "ios")))]
                                 ("POST", "/files/delete") => {
                                     handle_file_delete(
+                                        stream,
+                                        &buf,
+                                        &db,
+                                        peer_addr,
+                                    )
+                                    .await;
+                                }
+                                #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                                ("POST", "/dev-ports/list") => {
+                                    handle_dev_ports_list(
                                         stream,
                                         &buf,
                                         &db,
@@ -4185,4 +4244,252 @@ pub async fn p2p_upload_remote_file(
             failures.join("; ")
         )))
     }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn parse_path_and_query(path: &str) -> (String, std::collections::HashMap<String, String>) {
+    let mut parts = path.splitn(2, '?');
+    let clean_path = parts.next().unwrap_or("").to_string();
+    let mut params = std::collections::HashMap::new();
+    if let Some(query) = parts.next() {
+        for pair in query.split('&') {
+            let mut kv = pair.splitn(2, '=');
+            let k = kv.next().unwrap_or("").to_string();
+            let v = kv.next().unwrap_or("").to_string();
+            let decoded_v = percent_decode(&v);
+            params.insert(k, decoded_v);
+        }
+    }
+    (clean_path, params)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn percent_decode(s: &str) -> String {
+    let mut res = Vec::new();
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(hex_val) = u8::from_str_radix(std::str::from_utf8(&bytes[i+1..i+3]).unwrap_or(""), 16) {
+                res.push(hex_val);
+                i += 3;
+                continue;
+            }
+        }
+        res.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&res).into_owned()
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn percent_encode(s: &str) -> String {
+    let mut res = String::new();
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' || b == b'~' {
+            res.push(b as char);
+        } else {
+            res.push_str(&format!("%{:02X}", b));
+        }
+    }
+    res
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn get_cookie_value(request: &str, name: &str) -> Option<String> {
+    if let Some(cookie_header) = get_http_header(request, "Cookie") {
+        for cookie in cookie_header.split(';') {
+            let mut parts = cookie.splitn(2, '=');
+            let k = parts.next().unwrap_or("").trim();
+            let v = parts.next().unwrap_or("").trim();
+            if k == name {
+                return Some(percent_decode(v));
+            }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+pub async fn p2p_scan_dev_ports(
+    state: State<'_, AppState>,
+) -> AppResult<serde_json::Value> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        Ok(serde_json::json!({ "ports": [] }))
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        // Read custom ports from settings
+        let custom_ports_str = {
+            let conn = state.db.lock();
+            conn.query_row(
+                "SELECT value FROM settings WHERE key = 'p2p.custom_dev_ports'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .unwrap_or_else(|_| "[]".to_string())
+        };
+        let custom_ports: Vec<u16> = serde_json::from_str(&custom_ports_str).unwrap_or_default();
+
+        let mut ports_to_scan = vec![
+            1313, 3000, 3001, 3002, 3333, 4000, 4200, 5000, 5001, 5173, 5174, 8000, 8001, 8080, 8081, 8082, 9000
+        ];
+        for &cp in &custom_ports {
+            if !ports_to_scan.contains(&cp) {
+                ports_to_scan.push(cp);
+            }
+        }
+
+        let mut ports_status = Vec::new();
+        let mut tasks = Vec::new();
+
+        for port in ports_to_scan {
+            tasks.push(tokio::spawn(async move {
+                let addr = format!("127.0.0.1:{}", port);
+                let timeout = std::time::Duration::from_millis(150);
+                let active = match tokio::time::timeout(timeout, tokio::net::TcpStream::connect(addr)).await {
+                    Ok(Ok(_)) => true,
+                    _ => false,
+                };
+                (port, active)
+            }));
+        }
+
+        let results = futures::future::join_all(tasks).await;
+        for res in results {
+            if let Ok((port, active)) = res {
+                ports_status.push(serde_json::json!({
+                    "port": port,
+                    "active": active,
+                    "isCustom": custom_ports.contains(&port),
+                }));
+            }
+        }
+
+        ports_status.sort_by_key(|v| v.get("port").and_then(|p| p.as_u64()).unwrap_or(0));
+
+        Ok(serde_json::json!({
+            "ports": ports_status
+        }))
+    }
+}
+
+#[tauri::command]
+pub async fn p2p_get_remote_dev_ports(
+    state: State<'_, AppState>,
+) -> AppResult<serde_json::Value> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        Err(crate::errors::AppError::Internal("Not supported on mobile".into()))
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let body = serde_json::Map::new();
+        p2p_post_desktop_terminal(&state, "/dev-ports/list", body).await
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+async fn handle_dev_ports_list(
+    mut stream: tokio::net::TcpStream,
+    raw_request: &[u8],
+    db: &Arc<Mutex<rusqlite::Connection>>,
+    peer_addr: Option<std::net::SocketAddr>,
+) {
+    use tokio::io::AsyncWriteExt;
+
+    let body = request_body(raw_request);
+    let auth_req: DesktopAuthRequest = match serde_json::from_slice(body) {
+        Ok(r) => r,
+        Err(_) => {
+            write_json_response(
+                &mut stream,
+                "400 Bad Request",
+                serde_json::json!({"success": false, "message": "invalid request"}),
+            )
+            .await;
+            return;
+        }
+    };
+
+    // Authorize
+    let req_payload = TerminalRequest {
+        device_id: auth_req.device_id,
+        device_name: auth_req.device_name,
+        token: auth_req.token,
+        session_id: None,
+        shell: None,
+        data: None,
+        cols: None,
+        rows: None,
+    };
+    if authorize_terminal_request(db, &req_payload, peer_addr).is_err() {
+        write_json_response(
+            &mut stream,
+            "401 Unauthorized",
+            serde_json::json!({"success": false}),
+        )
+        .await;
+        return;
+    }
+
+    // Read custom ports from settings
+    let custom_ports_str = {
+        let conn = db.lock();
+        conn.query_row(
+            "SELECT value FROM settings WHERE key = 'p2p.custom_dev_ports'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .unwrap_or_else(|_| "[]".to_string())
+    };
+    let custom_ports: Vec<u16> = serde_json::from_str(&custom_ports_str).unwrap_or_default();
+
+    let mut ports_to_scan = vec![
+        1313, 3000, 3001, 3002, 3333, 4000, 4200, 5000, 5001, 5173, 5174, 8000, 8001, 8080, 8081, 8082, 9000
+    ];
+    for &cp in &custom_ports {
+        if !ports_to_scan.contains(&cp) {
+            ports_to_scan.push(cp);
+        }
+    }
+
+    let mut ports_status = Vec::new();
+    let mut tasks = Vec::new();
+
+    for port in ports_to_scan {
+        tasks.push(tokio::spawn(async move {
+            let addr = format!("127.0.0.1:{}", port);
+            let timeout = std::time::Duration::from_millis(150);
+            let active = match tokio::time::timeout(timeout, tokio::net::TcpStream::connect(addr)).await {
+                Ok(Ok(_)) => true,
+                _ => false,
+            };
+            (port, active)
+        }));
+    }
+
+    let results = futures::future::join_all(tasks).await;
+    for res in results {
+        if let Ok((port, active)) = res {
+            ports_status.push(serde_json::json!({
+                "port": port,
+                "active": active,
+                "isCustom": custom_ports.contains(&port),
+            }));
+        }
+    }
+
+    ports_status.sort_by_key(|v| v.get("port").and_then(|p| p.as_u64()).unwrap_or(0));
+
+    write_json_response(
+        &mut stream,
+        "200 OK",
+        serde_json::json!({
+            "success": true,
+            "ports": ports_status
+        }),
+    )
+    .await;
 }

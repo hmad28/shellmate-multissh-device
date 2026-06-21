@@ -13,17 +13,19 @@ import {
   WifiOff,
   Monitor,
   FolderOpen,
+  Globe,
 } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
 import { RemoteDesktopTab } from './RemoteDesktopTab';
 import { FileExplorerTab } from './FileExplorerTab';
+import { DevProxyTab } from './DevProxyTab';
 
 type PairedDevice = Awaited<
   ReturnType<typeof tauri.p2p.listPairedDevices>
 >[number];
 
 export function P2pSyncPanel() {
-  const [activeTab, setActiveTab] = useState<'pairing' | 'desktop' | 'files'>('pairing');
+  const [activeTab, setActiveTab] = useState<'pairing' | 'desktop' | 'files' | 'proxy'>('pairing');
   const [isRunning, setIsRunning] = useState(false);
   const [pin, setPin] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -210,6 +212,17 @@ export function P2pSyncPanel() {
         >
           <FolderOpen className="h-3.5 w-3.5" />
           File Explorer
+        </button>
+        <button
+          onClick={() => setActiveTab('proxy')}
+          className={`flex items-center gap-1.5 px-4 py-2.5 font-semibold border-b-2 transition-all ${
+            activeTab === 'proxy'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-fg-muted hover:text-fg hover:bg-bg-elevated/20'
+          }`}
+        >
+          <Globe className="h-3.5 w-3.5" />
+          Dev Proxy
         </button>
       </div>
 
@@ -443,6 +456,8 @@ export function P2pSyncPanel() {
         {activeTab === 'desktop' && <RemoteDesktopTab />}
 
         {activeTab === 'files' && <FileExplorerTab />}
+
+        {activeTab === 'proxy' && <DevProxyTab />}
       </div>
     </div>
   );

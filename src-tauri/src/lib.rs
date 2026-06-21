@@ -221,6 +221,8 @@ pub fn run() {
             commands::p2p_sync::p2p_get_remote_desktop_screenshot,
             commands::p2p_sync::p2p_download_remote_file,
             commands::p2p_sync::p2p_upload_remote_file,
+            commands::p2p_sync::p2p_scan_dev_ports,
+            commands::p2p_sync::p2p_get_remote_dev_ports,
             // Git
             commands::git::git_get_info,
             // Command History

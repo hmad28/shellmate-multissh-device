@@ -230,6 +230,14 @@ export const tauri = {
       invoke<void>('p2p_download_remote_file', { remotePath, localPath }),
     uploadRemoteFile: (remotePath: string, localPath: string) =>
       invoke<void>('p2p_upload_remote_file', { remotePath, localPath }),
+    scanDevPorts: () =>
+      invoke<{
+        ports: { port: number; active: boolean; isCustom: boolean }[];
+      }>('p2p_scan_dev_ports'),
+    getRemoteDevPorts: () =>
+      invoke<{
+        ports: { port: number; active: boolean; isCustom: boolean }[];
+      }>('p2p_get_remote_dev_ports'),
   },
   app: {
     version: () => invoke<string>('app_version'),
